@@ -119,8 +119,81 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
 void fft_init(const char* filename);
 void fft_shutdown(void);
+
+//
+// Map state
+//
+// The map state is used to determine which resources to load based on the time
+// of day, weather, and layout. Each resource has a specified state.
+//
+// The default state is:
+//   - Time: FFT_TIME_DAY
+//   - Weather: FFT_WEATHER_NONE
+//   - Layout: 0
+
+typedef enum {
+    FFT_TIME_DAY = 0x0,
+    FFT_TIME_NIGHT = 0x1,
+} fft_time_e;
+
+const char* fft_time_str(fft_time_e value);
+
+typedef enum {
+    FFT_WEATHER_NONE = 0x0,
+    FFT_WEATHER_NONE_ALT = 0x1,
+    FFT_WEATHER_NORMAL = 0x2,
+    FFT_WEATHER_STRONG = 0x3,
+    FFT_WEATHER_VERY_STRONG = 0x4,
+} fft_weather_e;
+
+const char* fft_weather_str(fft_weather_e value);
+
+// Each record is related to a specific time, weather, and layout.
+typedef struct {
+    fft_time_e time;
+    fft_weather_e weather;
+    int32_t layout;
+} fft_state_t;
+
+bool fft_state_is_equal(fft_state_t a, fft_state_t b);
+bool fft_state_is_default(fft_state_t map_state);
+
+//
+// Map/GNS records
+//
+
+enum {
+    FFT_RECORD_MAX_NUM = 40, // Maximum number of records per map
+    FFT_RECORD_SIZE = 20,    // Size of a record in bytes
+};
+
+typedef enum {
+    FFT_RECORDTYPE_NONE = 0x0000,
+    FFT_RECORDTYPE_TEXTURE = 0x1701,
+    FFT_RECORDTYPE_MESH_PRIMARY = 0x2E01,
+    FFT_RECORDTYPE_MESH_OVERRIDE = 0x2F01,
+    FFT_RECORDTYPE_MESH_ALT = 0x3001,
+    FFT_RECORDTYPE_END = 0x3101, // End of file marker
+} fft_recordtype_e;
+
+const char* fft_recordtype_str(fft_recordtype_e value);
+
+// A map record is the information for a specific resource.
+// It can be for a mesh (multiple types), texture, or end of file.
+//
+// These are also called GNS records.
+typedef struct {
+    fft_recordtype_e type;
+    fft_state_t state;
+    uint32_t sector;
+    uint32_t length;
+} fft_record_t;
 
 #ifdef __cplusplus
 }
@@ -128,18 +201,25 @@ void fft_shutdown(void);
 
 #endif // FFT_H
 
-// *===========================================================================
-// *                             IMPLEMENTATION
-// *===========================================================================
+// ============================================================================
+//                               IMPLEMENTATION
+//
+//                               IMPLEMENTATION
+//
+//                               IMPLEMENTATION
+// ============================================================================
 
 #ifdef FFT_IMPLEMENTATION
 
 #include <math.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+// This is the global state for the library to store file handlers, allocation
+// stats, cache, etc.
+//
+// WARNING: This is not thread-safe and should be used in a single-threaded context.
 static struct {
     struct {
         FILE* file; // The main file handle for the FFT binary.
@@ -784,7 +864,7 @@ static void fft_io_shutdown(void) {
     fclose(_fft_state.io.file);
 }
 
-static fft_io_desc_t fft_io_get_file_desc(size_t sector_start) {
+static fft_io_desc_t fft_io_get_file_desc(uint32_t sector_start) {
     for (size_t i = 0; i < F_FILE_COUNT; i++) {
         if (fft_file_list[i].sector == sector_start) {
             return fft_file_list[i];
@@ -793,9 +873,9 @@ static fft_io_desc_t fft_io_get_file_desc(size_t sector_start) {
     return (fft_io_desc_t) { .sector = 0, .size = 0, .name = NULL };
 }
 
-static fft_span_t fft_io_read(size_t sector_start, size_t size) {
-    int32_t offset = 0;
-    int32_t occupied_sectors = (int32_t)ceil((double)size / (double)FFT_IO_SECTOR_SIZE);
+static fft_span_t fft_io_read(uint32_t sector_start, uint32_t size) {
+    uint32_t offset = 0;
+    uint32_t occupied_sectors = (uint32_t)ceil(size / (double)FFT_IO_SECTOR_SIZE);
 
     // Try to get the file descriptor to tag the allocation with a filename.
     fft_io_desc_t desc = fft_io_get_file_desc(sector_start);
@@ -806,8 +886,8 @@ static fft_span_t fft_io_read(size_t sector_start, size_t size) {
         bytes = FFT_MEM_ALLOC_TAG(size, desc.name);
     }
 
-    for (int32_t i = 0; i < occupied_sectors; i++) {
-        int32_t seek_to = (int32_t)(((uint32_t)sector_start + (uint32_t)i) * FFT_IO_SECTOR_SIZE_RAW) + FFT_IO_SECTOR_HEADER_SIZE;
+    for (uint32_t i = 0; i < occupied_sectors; i++) {
+        int32_t seek_to = (int32_t)((sector_start + i) * FFT_IO_SECTOR_SIZE_RAW) + FFT_IO_SECTOR_HEADER_SIZE;
         int32_t sn = fseek(_fft_state.io.file, seek_to, SEEK_SET);
         FFT_ASSERT(sn == 0, "Failed to seek to sector");
 
@@ -836,6 +916,139 @@ static fft_span_t fft_io_open(fft_io_entry_e file) {
 static void fft_io_close(fft_span_t span) {
     FFT_MEM_FREE((void*)span.data);
     return;
+}
+
+//
+// Map state
+//
+// The map state is used to determine which resources to load based on the time
+// of day, weather, and layout.
+//
+
+static fft_state_t fft_default_state = (fft_state_t) {
+    .time = FFT_TIME_DAY,
+    .weather = FFT_WEATHER_NONE,
+    .layout = 0,
+};
+
+const char* fft_time_str(fft_time_e value) {
+    switch (value) {
+    case FFT_TIME_DAY:
+        return "Day";
+    case FFT_TIME_NIGHT:
+        return "Night";
+    default:
+        return "Unknown";
+    }
+}
+
+const char* fft_weather_str(fft_weather_e value) {
+    switch (value) {
+    case FFT_WEATHER_NONE:
+        return "None";
+    case FFT_WEATHER_NONE_ALT:
+        return "NoneAlt";
+    case FFT_WEATHER_NORMAL:
+        return "Normal";
+    case FFT_WEATHER_STRONG:
+        return "Strong";
+    case FFT_WEATHER_VERY_STRONG:
+        return "VeryStrong";
+    default:
+        return "Unknown";
+    }
+}
+
+bool fft_state_is_equal(fft_state_t a, fft_state_t b) {
+    return a.time == b.time && a.weather == b.weather && a.layout == b.layout;
+}
+
+bool fft_state_is_default(fft_state_t map_state) {
+    return fft_state_is_equal(fft_default_state, map_state);
+}
+
+//
+// Map/GNS records
+//
+// Map records (files ending in .GNS) contains a list of other files that are
+// meshes and textures.
+//
+
+// fft_record_read reads a map record from the span. Records are 20
+// bytes long and contain information about a specific resource.
+//
+// Format: AAAA BBCC DDDD xxxx EEEE xxxx FFFF FFFF xxxx xxxx
+// +------+---------+--------------------------------------+
+// | Pos  | Size    | Description                          |
+// +------+---------+--------------------------------------+
+// | xxxx | 2 bytes | padding                              |
+// | AAAA | 2 bytes | unknown, always 0x22, 0x30 or 0x70   |
+// | BB   | 1 bytes | room layout                          |
+// | CC   | 1 bytes | fft_time_e and fft_weather_e         |
+// | DDDD | 2 bytes | fft_recordtype_e                     |
+// | EEEE | 2 bytes | start sector                         |
+// | FFFF | 4 bytes | file length                          |
+// +------+---------+--------------------------------------+
+static fft_record_t fft_record_read(fft_span_t* span) {
+    uint8_t bytes[FFT_RECORD_SIZE];
+    fft_span_read_bytes(span, FFT_RECORD_SIZE, bytes);
+
+    int32_t layout = bytes[2];
+
+    // Time and weather are in the same byte.
+    // - High bit is time (Values: 0-1)
+    // - Low 3 bits are weather (Values: 0-4)
+    fft_time_e time = (fft_time_e)((bytes[3] >> 7) & 0x1);
+    fft_weather_e weather = (fft_weather_e)((bytes[3] >> 4) & 0x7);
+
+    fft_recordtype_e type;
+    memcpy(&type, &bytes[4], sizeof(uint16_t));
+
+    uint32_t sector, length;
+    memcpy(&sector, &bytes[8], sizeof(uint32_t));
+    memcpy(&length, &bytes[12], sizeof(uint32_t));
+
+    fft_record_t record = {
+        .type = type,
+        .sector = sector,
+        .length = length,
+        .state = {
+            .time = time,
+            .weather = weather,
+            .layout = layout,
+        },
+    };
+    return record;
+}
+
+static uint32_t fft_record_read_all(fft_span_t* span, fft_record_t* out_records) {
+    uint32_t count = 0;
+    while (span->offset + 20 < span->size) {
+        fft_record_t record = fft_record_read(span);
+        if (record.type == FFT_RECORDTYPE_END) {
+            // End of records, stop reading.
+            break;
+        }
+        out_records[count++] = record;
+    }
+    return count;
+}
+
+const char* fft_recordtype_str(fft_recordtype_e value) {
+    switch (value) {
+    case FFT_RECORDTYPE_MESH_PRIMARY:
+        return "Primary";
+    case FFT_RECORDTYPE_MESH_ALT:
+        return "Alt";
+    case FFT_RECORDTYPE_MESH_OVERRIDE:
+        return "Override";
+    case FFT_RECORDTYPE_TEXTURE:
+        return "Texture";
+    case FFT_RECORDTYPE_END:
+        return "End";
+    default:
+        return "Unknown";
+    }
 }
 
 //
