@@ -9,6 +9,12 @@ mkdir -p build
 # Change to build directory
 cd build
 
+if [ "$1" = "test" ]; then
+    gcc -o test ../test.c -I..
+    ./test
+    exit $?
+fi
+
 # Configure with cmake
 echo "Configuring with CMake..."
 cmake ..

@@ -131,4 +131,63 @@ extern "C" {
 
 #ifdef FFT_IMPLEMENTATION
 
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Usage:
+//   assert(condition, "Simple message");
+//   assert(condition, "Formatted message: %d, %s", value1, value2);
+#define FFT_ASSERT(cond, ...)                                   \
+    do {                                                        \
+        if (!(cond)) {                                          \
+            fprintf(stderr, "Assertion failed: " __VA_ARGS__);  \
+            fprintf(stderr, " at %s:%d\n", __FILE__, __LINE__); \
+            exit(EXIT_FAILURE);                                 \
+        }                                                       \
+    } while (0)
+
+//
+// Span
+//
+// Span allows reading specific types from a byte array.
+//
+
+enum {
+    // This is the size of a map texture, which is the largest file size we read.
+    FFT_SPAN_MAX_BYTES = 131072,
+};
+
+typedef struct {
+    const uint8_t* data;
+    size_t size;
+    size_t offset;
+} fft_span_t;
+
+static void fft_span_read_bytes(fft_span_t* f, size_t size, uint8_t* out_bytes) {
+    FFT_ASSERT(size <= FFT_SPAN_MAX_BYTES, "Too many bytes requested.");
+    memcpy(out_bytes, &f->data[f->offset], size);
+    f->offset += size;
+    return;
+}
+
+// FN_SPAN_READ is a macro that generates a read function for a specific type. It
+// reads the value, returns it and increments the offset.
+#define FFT_FN_SPAN_READ(name, type)                                                  \
+    static type fft_span_read_##name(fft_span_t* span) {                              \
+        FFT_ASSERT(span->offset + sizeof(type) <= span->size, "Out of bounds read."); \
+        type value;                                                                   \
+        memcpy(&value, &span->data[span->offset], sizeof(type));                      \
+        span->offset += sizeof(type);                                                 \
+        return value;                                                                 \
+    }
+
+FFT_FN_SPAN_READ(u8, uint8_t)
+FFT_FN_SPAN_READ(u16, uint16_t)
+FFT_FN_SPAN_READ(u32, uint32_t)
+FFT_FN_SPAN_READ(i8, int8_t)
+FFT_FN_SPAN_READ(i16, int16_t)
+FFT_FN_SPAN_READ(i32, int32_t)
+
 #endif // FFT_IMPLEMENTATION
