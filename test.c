@@ -152,9 +152,110 @@ static int test_span_read_bytes(void) {
     return 1;
 }
 
+static int test_mem_basic_alloc_free(void) {
+    // Initialize memory system
+    fft_mem_init();
+
+    // Test basic allocation
+    void* ptr1 = FFT_MEM_ALLOC(100);
+    TEST_ASSERT(ptr1 != NULL, "memory allocation succeeded");
+    TEST_ASSERT(_fft_state.mem.allocations_current == 1, "allocation count incremented");
+    TEST_ASSERT(_fft_state.mem.usage_current == 100, "usage tracking correct");
+    TEST_ASSERT(_fft_state.mem.usage_peak == 100, "peak usage tracked");
+    TEST_ASSERT(_fft_state.mem.usage_total == 100, "total usage tracked");
+
+    // Test second allocation
+    void* ptr2 = FFT_MEM_ALLOC(50);
+    TEST_ASSERT(ptr2 != NULL, "second allocation succeeded");
+    TEST_ASSERT(_fft_state.mem.allocations_current == 2, "allocation count is 2");
+    TEST_ASSERT(_fft_state.mem.usage_current == 150, "current usage is 150");
+    TEST_ASSERT(_fft_state.mem.usage_peak == 150, "peak usage updated to 150");
+    TEST_ASSERT(_fft_state.mem.usage_total == 150, "total usage is 150");
+
+    // Test freeing first allocation
+    fft_mem_free(ptr1);
+    TEST_ASSERT(_fft_state.mem.allocations_current == 1, "allocation count decremented");
+    TEST_ASSERT(_fft_state.mem.usage_current == 50, "current usage decreased");
+    TEST_ASSERT(_fft_state.mem.usage_peak == 150, "peak usage unchanged");
+    TEST_ASSERT(_fft_state.mem.usage_total == 150, "total usage unchanged");
+
+    // Test freeing second allocation
+    fft_mem_free(ptr2);
+    TEST_ASSERT(_fft_state.mem.allocations_current == 0, "all allocations freed");
+    TEST_ASSERT(_fft_state.mem.usage_current == 0, "no memory in use");
+
+    return 1;
+}
+
+static int test_mem_free_null(void) {
+    fft_mem_init();
+
+    // Test that freeing NULL doesn't crash or affect stats
+    size_t initial_count = _fft_state.mem.allocations_current;
+    size_t initial_usage = _fft_state.mem.usage_current;
+
+    fft_mem_free(NULL);
+
+    TEST_ASSERT(_fft_state.mem.allocations_current == initial_count, "NULL free doesn't change allocation count");
+    TEST_ASSERT(_fft_state.mem.usage_current == initial_usage, "NULL free doesn't change usage");
+
+    return 1;
+}
+
+static int test_mem_peak_tracking(void) {
+    fft_mem_init();
+
+    // Allocate and free to test peak tracking
+    void* ptr1 = FFT_MEM_ALLOC(100);
+    TEST_ASSERT(_fft_state.mem.usage_peak == 100, "peak starts at 100");
+
+    void* ptr2 = FFT_MEM_ALLOC(200);
+    TEST_ASSERT(_fft_state.mem.usage_peak == 300, "peak increases to 300");
+
+    fft_mem_free(ptr1);
+    TEST_ASSERT(_fft_state.mem.usage_peak == 300, "peak stays at 300 after free");
+    TEST_ASSERT(_fft_state.mem.usage_current == 200, "current drops to 200");
+
+    void* ptr3 = FFT_MEM_ALLOC(50);
+    TEST_ASSERT(_fft_state.mem.usage_peak == 300, "peak unchanged at 300");
+    TEST_ASSERT(_fft_state.mem.usage_current == 250, "current is 250");
+
+    fft_mem_free(ptr2);
+    fft_mem_free(ptr3);
+
+    return 1;
+}
+
+static int test_mem_total_tracking(void) {
+    fft_mem_init();
+
+    // Test that total keeps accumulating
+    void* ptr1 = FFT_MEM_ALLOC(100);
+    TEST_ASSERT(_fft_state.mem.usage_total == 100, "total starts at 100");
+    TEST_ASSERT(_fft_state.mem.allocations_total == 1, "total allocations is 1");
+
+    void* ptr2 = FFT_MEM_ALLOC(50);
+    TEST_ASSERT(_fft_state.mem.usage_total == 150, "total grows to 150");
+    TEST_ASSERT(_fft_state.mem.allocations_total == 2, "total allocations is 2");
+
+    fft_mem_free(ptr1);
+    TEST_ASSERT(_fft_state.mem.usage_total == 150, "total unchanged after free");
+    TEST_ASSERT(_fft_state.mem.allocations_total == 2, "total allocations unchanged");
+
+    void* ptr3 = FFT_MEM_ALLOC(25);
+    TEST_ASSERT(_fft_state.mem.usage_total == 175, "total grows to 175");
+    TEST_ASSERT(_fft_state.mem.allocations_total == 3, "total allocations is 3");
+
+    fft_mem_free(ptr2);
+    fft_mem_free(ptr3);
+
+    return 1;
+}
+
 int main(void) {
     printf("Running libFFT tests...\n\n");
 
+    // Span tests
     RUN_TEST(test_span_read_u8);
     RUN_TEST(test_span_read_i8);
     RUN_TEST(test_span_read_u16);
@@ -162,6 +263,12 @@ int main(void) {
     RUN_TEST(test_span_read_u32);
     RUN_TEST(test_span_read_i32);
     RUN_TEST(test_span_read_bytes);
+
+    // Memory tests
+    RUN_TEST(test_mem_basic_alloc_free);
+    RUN_TEST(test_mem_free_null);
+    RUN_TEST(test_mem_peak_tracking);
+    RUN_TEST(test_mem_total_tracking);
 
     printf("\nAll tests passed!\n");
     return 0;
