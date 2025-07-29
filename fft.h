@@ -245,13 +245,15 @@ typedef struct {
 
 #endif // FFT_H
 
-// ============================================================================
-//                               IMPLEMENTATION
-//
-//                               IMPLEMENTATION
-//
-//                               IMPLEMENTATION
-// ============================================================================
+/*
+================================================================================
+                                 IMPLEMENTATION
+
+                                 IMPLEMENTATION
+
+                                 IMPLEMENTATION
+================================================================================
+*/
 
 #ifdef FFT_IMPLEMENTATION
 
@@ -320,7 +322,7 @@ Defines
 
 /*
 ================================================================================
-Utilities
+Utilities Implementation
 ================================================================================
  */
 
@@ -334,7 +336,7 @@ static uint32_t fft_util_parse_u32(uint8_t* bytes) {
 
 /*
 ================================================================================
-Span
+Span Implementation
 ================================================================================
  */
 
@@ -376,7 +378,7 @@ FFT_FN_SPAN_READ(i32, int32_t)
 
 /*
 ================================================================================
-Memory
+Memory Implementation
 ================================================================================
  */
 
@@ -465,9 +467,31 @@ static void fft_mem_free(void* ptr) {
 
 /*
 ================================================================================
-IO/Filesystem
+IO/Filesystem Implementation
 ================================================================================
- */
+
+The io module provides access to the FFT BIN filesystem. This is not for general
+purpose filesystem access.
+
+Usage:
+    ```c
+    fft_io_init("fft.bin"); // Once, during application start
+
+    fft_span_t span = fft_io_open(F_BATTLE_BIN);
+    // Do some work
+    fft_io_close(span);
+
+    fft_io_shutdown(); // During application stop
+    ```
+
+================================================================================
+*/
+
+enum {
+    FFT_IO_SECTOR_SIZE = 2048,
+    FFT_IO_SECTOR_SIZE_RAW = 2352,
+    FFT_IO_SECTOR_HEADER_SIZE = 24,
+};
 
 // FFT_IO_INDEX is a list of most files in the filesystem from the original PSX
 // bin file. They are stored in this macro so we can generate the enum and the
@@ -875,12 +899,6 @@ IO/Filesystem
     X(F_WORLD__WLDTEX_TM2, 73000, 274432, "WORLD/WLDTEX.TM2")      \
     X(F_WORLD__WORLD_BIN, 84261, 973144, "WORLD/WORLD.BIN")
 
-enum {
-    FFT_IO_SECTOR_SIZE = 2048,
-    FFT_IO_SECTOR_SIZE_RAW = 2352,
-    FFT_IO_SECTOR_HEADER_SIZE = 24,
-};
-
 typedef struct {
     uint32_t sector;
     uint32_t size;
@@ -984,7 +1002,7 @@ static void fft_io_close(fft_span_t span) {
 
 /*
 ================================================================================
-Map state
+Map state Implementation
 ================================================================================
  */
 
@@ -1032,7 +1050,7 @@ bool fft_state_is_default(fft_state_t map_state) {
 
 /*
 ================================================================================
-GNS/Records
+GNS/Records Implementation
 ================================================================================
  */
 
@@ -1102,7 +1120,7 @@ const char* fft_recordtype_str(fft_recordtype_e value) {
 
 /*
 ================================================================================
-Entrypoint
+Entrypoint Implementation
 ================================================================================
  */
 
