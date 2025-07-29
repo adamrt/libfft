@@ -1,15 +1,17 @@
-// SPDX-License-Identifier: BSD-2-Clause
-// Copyright (c) 2025 Adam Patterson
-
-// For the latest version: - https://github.com/adamrt/libfft
-
 #ifndef FFT_H
 #define FFT_H
 
 
 /*
+================================================================================
+libFFT - A Final Fantasy Tactics Library
+================================================================================
+SPDX-License-Identifier: BSD-2-Clause
+Copyright (c) 2025 Adam Patterson
 
-Thank you to the FFHacktics community and their wiki. This library would not
+For the latest version: - https://github.com/adamrt/libfft
+
+❤️ Thank you to the FFHacktics community and their wiki. This library would not
 be possible without their amazing work (https://ffhacktics.com/wiki/).
 
 ================================================================================
@@ -21,66 +23,60 @@ be possible without their amazing work (https://ffhacktics.com/wiki/).
              \ \_______\ \__\ \_______\ \__\   \ \__\       \ \__\
               \|_______|\|__|\|_______|\|__|    \|__|        \|__|
 
-                  libFFT - A Final Fantasy Tactics Library
-
 ================================================================================
 
-This library provides a way to read data from the Final Fantasy Tactics PS1
-binary file. It allows reading maps, textures, events, etc. It is designed to be
-used in C/C++ projects and provides a simple API for reading the data in a
-structured way.
+DESCRIPTION
+    This library provides a way to read data from the Final Fantasy Tactics PS1
+    binary file. It allows reading maps, textures, events, etc. It is designed
+    to be used in C/C++ projects and provides a simple API for reading the data
+    in a structured way.
 
-The purpose of this library is to codify the knowledge known about the FFT
-data and to make it easy to use the data in other applications.
+PURPOSE
+    The purpose of this library is to codify the knowledge known about the FFT
+    data and to make it easy to use the data in other applications.
 
-This library can read:
-  - Maps: meshes, textures, terrain, lighting, etc.
-  - Events: event instructions, messages, etc.
+USAGE
+    To use this library, you need to include the header file in your project and
+    in a single translation unit (C file), define `FFT_IMPLEMENTATION` before
+    including the header. You can include the file without defining
+    `FFT_IMPLEMENTATION` in multiple translation units to use the library.
 
-The only supported file is the PSX US Final Fantasy Tactics BIN file:
-  - Serial: SCUS-94221
-  - SHA1:   2b5d4db3229cdc7bbd0358b95fcba33dddae8bba
-  - MD5:    b156ba386436d20fd5ed8d37bab6b624
+        ```c
+        #include <stdio.h>
 
-You can check your file with the following commands:
-    ```bash
-    $ md5sum fft.bin
-    $ sha1sum fft.bin
-    ```
-================================================================================
+        #define FFT_IMPLEMENTATION
+        #include "fft.h"
 
-Usage:
-
-To use this library, you need to include the header file in your project and
-in a single translation unit (C file), define `FFT_IMPLEMENTATION` before
-including the header. You can include the file without defining
-`FFT_IMPLEMENTATION` in multiple translation units to use the library.
-
-    ```c
-    #include <stdio.h>
-
-    #define FFT_IMPLEMENTATION
-    #include "fft.h"
-    ```
-
-Then you can initialize the library by calling `fft_init` with the path to the
-FFT binary file. After that, you can read maps and other data.
-
-    ```c
-    int main() {
-        fft_init("fft.bin");
-        map_data_t* map = fft_read_map(1); // Read map with ID 1
-        if (map) {
-            // Do something with the map data
-            fft_destroy_map(map); // Clean up when done
+        int main() {
+            fft_init("my_fft_file.bin");
+            fft_do_thing(...);
+            ffft_shutdown();
         }
+        ```
+WARNINGS
+    - This lib is not thread-safe
+    - This lib uses ASSERTs in many places instead of returning errors
 
-        fft_shutdown(); // Clean up the library
-    }
-    ```
+    Both of these will probably be addressed in the future. This library was
+    extracted from another project of mine where single-threaded and asserts
+    were acceptable.
+
+GAME DATA/ASSETS:
+    You will need to rip your own BIN file from a PSX disc. The only supported
+    file is the PSX US Final Fantasy Tactics BIN file:
+      - Serial: SCUS-94221
+      - SHA1:   2b5d4db3229cdc7bbd0358b95fcba33dddae8bba
+      - MD5:    b156ba386436d20fd5ed8d37bab6b624
+
+    You can check your file with the following commands:
+        ```bash
+        $ sha1sum fft.bin
+        $ md5sum fft.bin
+        ```
+
 ================================================================================
-
-Data structures:
+About libFFT Data Structures
+================================================================================
 
 The data structures are intentionally simple and try not to make assumptions
 about the users intentions. For instance, we keep the original types were
@@ -136,8 +132,10 @@ void fft_shutdown(void);
 Map state
 ================================================================================
 
-The map state is used to determine which resources to load based on the time
-of day, weather, and layout. Each resource has a specified state.
+The map state represents the state of a map. A map typically has multiple meshes
+and textures for use in different events and random battles. The state is used
+to determine which resources to load based on the time of day, weather, and
+layout. Each resource has a specified state.
 
 The default state is:
   - Time: FFT_TIME_DAY
@@ -212,8 +210,8 @@ Format: AA BC DD EE FF GG HH HH II JJ
 */
 
 enum {
-    FFT_RECORD_MAX_NUM = 40, // Maximum number of records per map
-    FFT_RECORD_SIZE = 20,    // Size of a record in bytes
+    FFT_RECORD_MAX = 40,  // Maximum number of records per map
+    FFT_RECORD_SIZE = 20, // Size of a record in bytes
 };
 
 typedef enum {
