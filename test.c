@@ -252,6 +252,148 @@ static int test_mem_total_tracking(void) {
     return 1;
 }
 
+static int test_time_str(void) {
+    const char* day_str = fft_time_str(FFT_TIME_DAY);
+    TEST_ASSERT(strcmp(day_str, "Day") == 0, "FFT_TIME_DAY string");
+
+    const char* night_str = fft_time_str(FFT_TIME_NIGHT);
+    TEST_ASSERT(strcmp(night_str, "Night") == 0, "FFT_TIME_NIGHT string");
+
+    const char* unknown_str = fft_time_str((fft_time_e)99);
+    TEST_ASSERT(strcmp(unknown_str, "Unknown") == 0, "invalid time enum string");
+
+    return 1;
+}
+
+static int test_weather_str(void) {
+    const char* none_str = fft_weather_str(FFT_WEATHER_NONE);
+    TEST_ASSERT(strcmp(none_str, "None") == 0, "FFT_WEATHER_NONE string");
+
+    const char* none_alt_str = fft_weather_str(FFT_WEATHER_NONE_ALT);
+    TEST_ASSERT(strcmp(none_alt_str, "NoneAlt") == 0, "FFT_WEATHER_NONE_ALT string");
+
+    const char* normal_str = fft_weather_str(FFT_WEATHER_NORMAL);
+    TEST_ASSERT(strcmp(normal_str, "Normal") == 0, "FFT_WEATHER_NORMAL string");
+
+    const char* strong_str = fft_weather_str(FFT_WEATHER_STRONG);
+    TEST_ASSERT(strcmp(strong_str, "Strong") == 0, "FFT_WEATHER_STRONG string");
+
+    const char* very_strong_str = fft_weather_str(FFT_WEATHER_VERY_STRONG);
+    TEST_ASSERT(strcmp(very_strong_str, "VeryStrong") == 0, "FFT_WEATHER_VERY_STRONG string");
+
+    const char* unknown_str = fft_weather_str((fft_weather_e)99);
+    TEST_ASSERT(strcmp(unknown_str, "Unknown") == 0, "invalid weather enum string");
+
+    return 1;
+}
+
+static int test_recordtype_str(void) {
+    const char* none_str = fft_recordtype_str(FFT_RECORDTYPE_NONE);
+    TEST_ASSERT(strcmp(none_str, "Unknown") == 0, "FFT_RECORDTYPE_NONE string");
+
+    const char* texture_str = fft_recordtype_str(FFT_RECORDTYPE_TEXTURE);
+    TEST_ASSERT(strcmp(texture_str, "Texture") == 0, "FFT_RECORDTYPE_TEXTURE string");
+
+    const char* primary_str = fft_recordtype_str(FFT_RECORDTYPE_MESH_PRIMARY);
+    TEST_ASSERT(strcmp(primary_str, "Primary") == 0, "FFT_RECORDTYPE_MESH_PRIMARY string");
+
+    const char* override_str = fft_recordtype_str(FFT_RECORDTYPE_MESH_OVERRIDE);
+    TEST_ASSERT(strcmp(override_str, "Override") == 0, "FFT_RECORDTYPE_MESH_OVERRIDE string");
+
+    const char* alt_str = fft_recordtype_str(FFT_RECORDTYPE_MESH_ALT);
+    TEST_ASSERT(strcmp(alt_str, "Alt") == 0, "FFT_RECORDTYPE_MESH_ALT string");
+
+    const char* end_str = fft_recordtype_str(FFT_RECORDTYPE_END);
+    TEST_ASSERT(strcmp(end_str, "End") == 0, "FFT_RECORDTYPE_END string");
+
+    const char* unknown_str = fft_recordtype_str((fft_recordtype_e)0x9999);
+    TEST_ASSERT(strcmp(unknown_str, "Unknown") == 0, "invalid recordtype enum string");
+
+    return 1;
+}
+
+static int test_state_functions(void) {
+    // Test default state
+    fft_state_t default_state = { FFT_TIME_DAY, FFT_WEATHER_NONE, 0 };
+    TEST_ASSERT(fft_state_is_default(default_state), "default state is recognized");
+
+    // Test non-default states
+    fft_state_t night_state = { FFT_TIME_NIGHT, FFT_WEATHER_NONE, 0 };
+    TEST_ASSERT(!fft_state_is_default(night_state), "night state is not default");
+
+    fft_state_t weather_state = { FFT_TIME_DAY, FFT_WEATHER_NORMAL, 0 };
+    TEST_ASSERT(!fft_state_is_default(weather_state), "weather state is not default");
+
+    fft_state_t layout_state = { FFT_TIME_DAY, FFT_WEATHER_NONE, 1 };
+    TEST_ASSERT(!fft_state_is_default(layout_state), "layout state is not default");
+
+    // Test state equality
+    fft_state_t state1 = { FFT_TIME_NIGHT, FFT_WEATHER_STRONG, 2 };
+    fft_state_t state2 = { FFT_TIME_NIGHT, FFT_WEATHER_STRONG, 2 };
+    fft_state_t state3 = { FFT_TIME_DAY, FFT_WEATHER_STRONG, 2 };
+
+    TEST_ASSERT(fft_state_is_equal(state1, state2), "identical states are equal");
+    TEST_ASSERT(!fft_state_is_equal(state1, state3), "different states are not equal");
+
+    return 1;
+}
+
+static int test_record_parsing(void) {
+    // Create simple test record data - test basic bit manipulation
+    uint8_t test_byte = 0x90; // 1001 0000
+
+    // Test time extraction (high bit)
+    fft_time_e time = (fft_time_e)((test_byte >> 7) & 0x1);
+    TEST_ASSERT(time == FFT_TIME_NIGHT, "time bit extraction");
+
+    // Test weather extraction (bits 4-6)
+    fft_weather_e weather = (fft_weather_e)((test_byte >> 4) & 0x7);
+    TEST_ASSERT(weather == FFT_WEATHER_NONE_ALT, "weather bit extraction");
+
+    // Test basic constants
+    TEST_ASSERT(FFT_RECORD_SIZE == 20, "record size constant");
+    TEST_ASSERT(FFT_RECORDTYPE_TEXTURE == 0x1701, "texture record type constant");
+
+    return 1;
+}
+
+static int test_mem_alloc_with_tag(void) {
+    fft_mem_init();
+
+    // Test allocation with tag
+    void* ptr1 = FFT_MEM_ALLOC_TAG(100, "test_buffer");
+    TEST_ASSERT(ptr1 != NULL, "tagged allocation succeeded");
+    TEST_ASSERT(_fft_state.mem.allocations_current == 1, "allocation count correct");
+    TEST_ASSERT(_fft_state.mem.usage_current == 100, "usage tracking correct");
+
+    // Test allocation without tag (should still work)
+    void* ptr2 = FFT_MEM_ALLOC(50);
+    TEST_ASSERT(ptr2 != NULL, "untagged allocation succeeded");
+    TEST_ASSERT(_fft_state.mem.allocations_current == 2, "allocation count is 2");
+
+    FFT_MEM_FREE(ptr1);
+    FFT_MEM_FREE(ptr2);
+    TEST_ASSERT(_fft_state.mem.allocations_current == 0, "all allocations freed");
+
+    return 1;
+}
+
+static int test_io_file_desc_lookup(void) {
+    // Test finding a file that exists
+    fft_io_desc_t desc = fft_io_get_file_desc(1000); // F_BATTLE_BIN sector
+    TEST_ASSERT(desc.sector == 1000, "found correct sector");
+    TEST_ASSERT(desc.size == 1397096, "found correct size");
+    TEST_ASSERT(strcmp(desc.name, "BATTLE.BIN") == 0, "found correct name");
+
+    // Test finding a file that doesn't exist
+    fft_io_desc_t invalid_desc = fft_io_get_file_desc(99999);
+    TEST_ASSERT(invalid_desc.sector == 0, "invalid file returns zero sector");
+    TEST_ASSERT(invalid_desc.size == 0, "invalid file returns zero size");
+    TEST_ASSERT(invalid_desc.name == NULL, "invalid file returns null name");
+
+    return 1;
+}
+
 int main(void) {
     printf("Running libFFT tests...\n\n");
 
@@ -269,6 +411,21 @@ int main(void) {
     RUN_TEST(test_mem_free_null);
     RUN_TEST(test_mem_peak_tracking);
     RUN_TEST(test_mem_total_tracking);
+    RUN_TEST(test_mem_alloc_with_tag);
+
+    // String function tests
+    RUN_TEST(test_time_str);
+    RUN_TEST(test_weather_str);
+    RUN_TEST(test_recordtype_str);
+
+    // State function tests
+    RUN_TEST(test_state_functions);
+
+    // Record parsing tests
+    RUN_TEST(test_record_parsing);
+
+    // IO function tests
+    RUN_TEST(test_io_file_desc_lookup);
 
     printf("\nAll tests passed!\n");
     return 0;
