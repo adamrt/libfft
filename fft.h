@@ -241,7 +241,32 @@ typedef struct {
 
 /*
 ================================================================================
-IO/Filesystem Implementation
+Span
+================================================================================
+
+Span is a structure that represents a contiguous block of data in memory. A span
+is used to represent a file or part of a file in the FFT BIN filesystem.
+
+The related functions allow simple reading of specific datatypes.
+
+Example:
+    ```c
+    fft_span_t span = fft_io_open(F_BATTLE_BIN);
+    uint32_t thing = fft_span_read_u32(&span);
+    ```
+
+================================================================================
+*/
+
+typedef struct {
+    const uint8_t* data;
+    size_t size;
+    size_t offset;
+} fft_span_t;
+
+/*
+================================================================================
+IO/Filesystem
 ================================================================================
 
 The io module provides access to the FFT BIN filesystem. This is not for general
@@ -778,12 +803,6 @@ enum {
     // This is the size of a map texture, which is the largest file size we read.
     FFT_SPAN_MAX_BYTES = 131072,
 };
-
-typedef struct {
-    const uint8_t* data;
-    size_t size;
-    size_t offset;
-} fft_span_t;
 
 static void fft_span_read_bytes(fft_span_t* f, size_t size, uint8_t* out_bytes) {
     FFT_ASSERT(size <= FFT_SPAN_MAX_BYTES, "Too many bytes requested.");
