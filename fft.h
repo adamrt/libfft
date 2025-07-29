@@ -169,6 +169,7 @@ typedef struct {
 // Comparative functions for fft_state_t
 bool fft_state_is_equal(fft_state_t a, fft_state_t b);
 bool fft_state_is_default(fft_state_t map_state);
+
 // String representations of the enums
 const char* fft_time_str(fft_time_e value);
 const char* fft_weather_str(fft_weather_e value);
@@ -178,6 +179,34 @@ const char* fft_weather_str(fft_weather_e value);
 Map/GNS records
 ================================================================================
 
+Each map has a single GNS file. These files contains a varying number of 20-byte
+records (max 40). These records describe the for the map. They have a type
+(fft_recordtype_e), which specifies if its a texture, mesh data, etc. They also
+have the weather/time/layout they are valid for. Then the location (sector) and
+size in the BIN file for that data.
+
+Each resource is a separate file in the original PSX binary if you mount the
+disk. But, we just get the sector and length, and read them directly from the
+binary, to simplify the process.
+
+We don't know the number of records ahead of time, so we read each one until the
+type is FFT_RECORDTYPE_END.
+
+Format: AA BC DD EE FF GG HH HH II JJ
++------+---------+-------+--------------------------------------+
+| Pos  | Size    | Index | Description                          |
++------+---------+-------+--------------------------------------+
+| AA   | 2 bytes |   0-1 | unknown, always 0x22, 0x30 or 0x70   |
+| B    | 1 bytes |     2 | room layout                          |
+| C    | 1 bytes |     3 | fft_time_e and fft_weather_e         |
+| DD   | 2 bytes |   4-5 | fft_recordtype_e                     |
+| EE   | 2 bytes |   6-7 | unknown                              |
+| FF   | 2 bytes |   8-9 | start sector                         |
+| GG   | 2 bytes | 10-11 | unknown                              |
+| HHHH | 4 bytes | 12-15 | resource size                        |
+| II   | 2 bytes | 16-17 | unknown                              |
+| JJ   | 2 bytes | 18-19 | unknown                              |
++------+---------+-------+--------------------------------------+
 
 ================================================================================
 */
@@ -198,15 +227,18 @@ typedef enum {
 
 const char* fft_recordtype_str(fft_recordtype_e value);
 
-// A map record is the information for a specific resource.
-// It can be for a mesh (multiple types), texture, or end of file.
-//
-// These are also called GNS records.
 typedef struct {
     fft_recordtype_e type;
     fft_state_t state;
     uint32_t sector;
     uint32_t length;
+
+    // Padding or unknown fields
+    uint16_t aa;
+    uint16_t ee;
+    uint16_t gg;
+    uint16_t ii;
+    uint16_t jj;
 } fft_record_t;
 
 #ifdef __cplusplus
@@ -230,9 +262,12 @@ typedef struct {
 #include <stdlib.h>
 #include <string.h>
 
-// This is the global state for the library to store file handlers, allocation
-// stats, cache, etc.
-//
+/*
+================================================================================
+Global State
+================================================================================
+ */
+
 // WARNING: This is not thread-safe and should be used in a single-threaded context.
 static struct {
     struct {
@@ -248,9 +283,11 @@ static struct {
     } mem;
 } _fft_state;
 
-//
-// Defines
-//
+/*
+================================================================================
+Defines
+================================================================================
+ */
 
 // You can define these to change the memory allocation functions used by the library.
 //
@@ -263,6 +300,7 @@ static struct {
 #    define FFT_MEM_FREE(ptr)            fft_mem_free(ptr)
 #endif
 
+// Macros for min/max operations.
 #define FFT_MAX(a, b) ((a) > (b) ? (a) : (b))
 #define FFT_MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -282,11 +320,25 @@ static struct {
         }                                                       \
     } while (0)
 
-//
-// Span
-//
-// Span allows reading specific types from a byte array.
-//
+/*
+================================================================================
+Utilities
+================================================================================
+ */
+
+static uint16_t fft_util_parse_u16(uint8_t* bytes) {
+    return (uint16_t)bytes[0] | (uint16_t)((uint16_t)bytes[1] << 8);
+}
+
+static uint32_t fft_util_parse_u32(uint8_t* bytes) {
+    return (uint32_t)(bytes[0]) | ((uint32_t)(bytes[1]) << 8) | ((uint32_t)(bytes[2]) << 16) | ((uint32_t)(bytes[3]) << 24);
+}
+
+/*
+================================================================================
+Span
+================================================================================
+ */
 
 enum {
     // This is the size of a map texture, which is the largest file size we read.
@@ -324,11 +376,11 @@ FFT_FN_SPAN_READ(i8, int8_t)
 FFT_FN_SPAN_READ(i16, int16_t)
 FFT_FN_SPAN_READ(i32, int32_t)
 
-//
-// Memory
-//
-// Memory management functions for tracking allocations and usage.
-//
+/*
+================================================================================
+Memory
+================================================================================
+ */
 
 typedef struct fft_mem_alloc_header_t {
     size_t size;
@@ -413,11 +465,11 @@ static void fft_mem_free(void* ptr) {
     free(header);
 }
 
-//
-// IO/Filesystem
-//
-// This section provides functions to read files from the FFT binary file.
-//
+/*
+================================================================================
+IO/Filesystem
+================================================================================
+ */
 
 // FFT_IO_INDEX is a list of most files in the filesystem from the original PSX
 // bin file. They are stored in this macro so we can generate the enum and the
@@ -932,12 +984,11 @@ static void fft_io_close(fft_span_t span) {
     return;
 }
 
-//
-// Map state
-//
-// The map state is used to determine which resources to load based on the time
-// of day, weather, and layout.
-//
+/*
+================================================================================
+Map state
+================================================================================
+ */
 
 static fft_state_t fft_default_state = (fft_state_t) {
     .time = FFT_TIME_DAY,
@@ -981,46 +1032,27 @@ bool fft_state_is_default(fft_state_t map_state) {
     return fft_state_is_equal(fft_default_state, map_state);
 }
 
-//
-// Map/GNS records
-//
-// Map records (files ending in .GNS) contains a list of other files that are
-// meshes and textures.
-//
+/*
+================================================================================
+GNS/Records
+================================================================================
+ */
 
-// fft_record_read reads a map record from the span. Records are 20
-// bytes long and contain information about a specific resource.
-//
-// Format: AAAA BBCC DDDD xxxx EEEE xxxx FFFF FFFF xxxx xxxx
-// +------+---------+--------------------------------------+
-// | Pos  | Size    | Description                          |
-// +------+---------+--------------------------------------+
-// | xxxx | 2 bytes | padding                              |
-// | AAAA | 2 bytes | unknown, always 0x22, 0x30 or 0x70   |
-// | BB   | 1 bytes | room layout                          |
-// | CC   | 1 bytes | fft_time_e and fft_weather_e         |
-// | DDDD | 2 bytes | fft_recordtype_e                     |
-// | EEEE | 2 bytes | start sector                         |
-// | FFFF | 4 bytes | file length                          |
-// +------+---------+--------------------------------------+
 static fft_record_t fft_record_read(fft_span_t* span) {
     uint8_t bytes[FFT_RECORD_SIZE];
     fft_span_read_bytes(span, FFT_RECORD_SIZE, bytes);
 
+    uint16_t aa = fft_util_parse_u16(&bytes[0]);
     int32_t layout = bytes[2];
-
-    // Time and weather are in the same byte.
-    // - High bit is time (Values: 0-1)
-    // - Low 3 bits are weather (Values: 0-4)
     fft_time_e time = (fft_time_e)((bytes[3] >> 7) & 0x1);
     fft_weather_e weather = (fft_weather_e)((bytes[3] >> 4) & 0x7);
-
-    fft_recordtype_e type;
-    memcpy(&type, &bytes[4], sizeof(uint16_t));
-
-    uint32_t sector, length;
-    memcpy(&sector, &bytes[8], sizeof(uint32_t));
-    memcpy(&length, &bytes[12], sizeof(uint32_t));
+    fft_recordtype_e type = fft_util_parse_u16(&bytes[4]);
+    uint16_t ee = fft_util_parse_u16(&bytes[6]);
+    uint32_t sector = fft_util_parse_u32(&bytes[8]);
+    uint16_t gg = fft_util_parse_u16(&bytes[10]);
+    uint32_t length = fft_util_parse_u32(&bytes[12]);
+    uint16_t ii = fft_util_parse_u16(&bytes[16]);
+    uint16_t jj = fft_util_parse_u16(&bytes[18]);
 
     fft_record_t record = {
         .type = type,
@@ -1031,6 +1063,11 @@ static fft_record_t fft_record_read(fft_span_t* span) {
             .weather = weather,
             .layout = layout,
         },
+        .aa = aa,
+        .ee = ee,
+        .gg = gg,
+        .ii = ii,
+        .jj = jj,
     };
     return record;
 }
@@ -1065,9 +1102,11 @@ const char* fft_recordtype_str(fft_recordtype_e value) {
     }
 }
 
-//
-// Entrypoint
-//
+/*
+================================================================================
+Entrypoint
+================================================================================
+ */
 
 void fft_init(const char* filename) {
     fft_mem_init();

@@ -10,6 +10,7 @@ mkdir -p build
 cd build
 
 if [ "$1" = "test" ]; then
+    echo "Building tests..."
     gcc -o test ../test.c -I..
     ./test
     exit $?

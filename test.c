@@ -395,7 +395,7 @@ static int test_io_file_desc_lookup(void) {
 }
 
 int main(void) {
-    printf("Running libFFT tests...\n\n");
+    printf("Running tests...\n\n");
 
     // Span tests
     RUN_TEST(test_span_read_u8);
