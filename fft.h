@@ -913,7 +913,7 @@ typedef enum {
 //     [F_MAP__MAP001_GNS] = { .sector = 11304, .size = 2388,    .name = "MAP/MAP000.GNS"},
 //     ...
 //   }
-const fft_io_desc_t fft_file_list[F_FILE_COUNT] = {
+const fft_io_desc_t fft_io_file_list[F_FILE_COUNT] = {
 #define X(oname, osector, osize, opath) [oname] = { .sector = osector, .size = osize, .name = opath },
     FFT_IO_INDEX
 #undef X
@@ -930,8 +930,8 @@ static void fft_io_shutdown(void) {
 
 static fft_io_desc_t fft_io_get_file_desc(uint32_t sector_start) {
     for (size_t i = 0; i < F_FILE_COUNT; i++) {
-        if (fft_file_list[i].sector == sector_start) {
-            return fft_file_list[i];
+        if (fft_io_file_list[i].sector == sector_start) {
+            return fft_io_file_list[i];
         }
     }
     return (fft_io_desc_t) { .sector = 0, .size = 0, .name = NULL };
@@ -973,7 +973,7 @@ static fft_span_t fft_io_read(uint32_t sector_start, uint32_t size) {
 }
 
 static fft_span_t fft_io_open(fft_io_entry_e file) {
-    fft_io_desc_t desc = fft_file_list[file];
+    fft_io_desc_t desc = fft_io_file_list[file];
     return fft_io_read(desc.sector, desc.size);
 }
 
