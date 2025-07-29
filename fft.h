@@ -239,232 +239,6 @@ typedef struct {
     uint16_t jj;
 } fft_record_t;
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif // FFT_H
-
-/*
-================================================================================
-                                 IMPLEMENTATION
-
-                                 IMPLEMENTATION
-
-                                 IMPLEMENTATION
-================================================================================
-*/
-
-#ifdef FFT_IMPLEMENTATION
-
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-/*
-================================================================================
-Global State
-================================================================================
- */
-
-// WARNING: This is not thread-safe and should be used in a single-threaded context.
-static struct {
-    struct {
-        FILE* file; // The main file handle for the FFT binary.
-    } io;
-
-    struct {
-        size_t usage_peak;
-        size_t usage_total;
-        size_t usage_current;
-        size_t allocations_total;
-        size_t allocations_current;
-    } mem;
-} _fft_state;
-
-/*
-================================================================================
-Defines
-================================================================================
- */
-
-// You can define these to change the memory allocation functions used by the library.
-//
-// #define FFT_MEM_ALLOC(size) malloc(size)
-// #define FFT_MEM_ALLOC_TAG(size, tag) malloc(size)
-// #define FFT_MEM_FREE(ptr) free(ptr)
-#ifndef FFT_MEM_ALLOC
-#    define FFT_MEM_ALLOC(size)          fft_mem_alloc(size, __FILE__, __LINE__, NULL);
-#    define FFT_MEM_ALLOC_TAG(size, tag) fft_mem_alloc(size, __FILE__, __LINE__, tag);
-#    define FFT_MEM_FREE(ptr)            fft_mem_free(ptr)
-#endif
-
-// Macros for min/max operations.
-#define FFT_MAX(a, b) ((a) > (b) ? (a) : (b))
-#define FFT_MIN(a, b) ((a) < (b) ? (a) : (b))
-
-// Bytes to kilobytes and megabytes.
-#define FFT_BYTES_TO_KB(x) ((double)(x) / 1024.0)
-#define FFT_BYTES_TO_MB(x) ((double)(x) / (1024.0 * 1024.0))
-
-// Usage:
-//   assert(condition, "Simple message");
-//   assert(condition, "Formatted message: %d, %s", value1, value2);
-#define FFT_ASSERT(cond, ...)                                   \
-    do {                                                        \
-        if (!(cond)) {                                          \
-            fprintf(stderr, "Assertion failed: " __VA_ARGS__);  \
-            fprintf(stderr, " at %s:%d\n", __FILE__, __LINE__); \
-            exit(EXIT_FAILURE);                                 \
-        }                                                       \
-    } while (0)
-
-/*
-================================================================================
-Utilities Implementation
-================================================================================
- */
-
-static uint16_t fft_util_parse_u16(uint8_t* bytes) {
-    return (uint16_t)bytes[0] | (uint16_t)((uint16_t)bytes[1] << 8);
-}
-
-static uint32_t fft_util_parse_u32(uint8_t* bytes) {
-    return (uint32_t)(bytes[0]) | ((uint32_t)(bytes[1]) << 8) | ((uint32_t)(bytes[2]) << 16) | ((uint32_t)(bytes[3]) << 24);
-}
-
-/*
-================================================================================
-Span Implementation
-================================================================================
- */
-
-enum {
-    // This is the size of a map texture, which is the largest file size we read.
-    FFT_SPAN_MAX_BYTES = 131072,
-};
-
-typedef struct {
-    const uint8_t* data;
-    size_t size;
-    size_t offset;
-} fft_span_t;
-
-static void fft_span_read_bytes(fft_span_t* f, size_t size, uint8_t* out_bytes) {
-    FFT_ASSERT(size <= FFT_SPAN_MAX_BYTES, "Too many bytes requested.");
-    memcpy(out_bytes, &f->data[f->offset], size);
-    f->offset += size;
-    return;
-}
-
-// FN_SPAN_READ is a macro that generates a read function for a specific type. It
-// reads the value, returns it and increments the offset.
-#define FFT_FN_SPAN_READ(name, type)                                                  \
-    static type fft_span_read_##name(fft_span_t* span) {                              \
-        FFT_ASSERT(span->offset + sizeof(type) <= span->size, "Out of bounds read."); \
-        type value;                                                                   \
-        memcpy(&value, &span->data[span->offset], sizeof(type));                      \
-        span->offset += sizeof(type);                                                 \
-        return value;                                                                 \
-    }
-
-FFT_FN_SPAN_READ(u8, uint8_t)
-FFT_FN_SPAN_READ(u16, uint16_t)
-FFT_FN_SPAN_READ(u32, uint32_t)
-FFT_FN_SPAN_READ(i8, int8_t)
-FFT_FN_SPAN_READ(i16, int16_t)
-FFT_FN_SPAN_READ(i32, int32_t)
-
-/*
-================================================================================
-Memory Implementation
-================================================================================
- */
-
-typedef struct fft_mem_alloc_header_t {
-    size_t size;
-    int32_t line;
-    const char* file;
-    const char* tag;
-    struct fft_mem_alloc_header_t* next;
-} fft_mem_alloc_header_t;
-
-static fft_mem_alloc_header_t* allocations_head = NULL;
-
-static void fft_mem_init(void) {
-    _fft_state.mem.usage_peak = 0;
-    _fft_state.mem.usage_total = 0;
-    _fft_state.mem.usage_current = 0;
-    _fft_state.mem.allocations_total = 0;
-    _fft_state.mem.allocations_current = 0;
-}
-
-static void fft_mem_shutdown(void) {
-    if (_fft_state.mem.allocations_current != 0) {
-        printf("Memory leak detected: %zu allocations remaining\n", _fft_state.mem.allocations_current);
-        fft_mem_alloc_header_t* current = allocations_head;
-        while (current) {
-            printf("Leaked %zu bytes allocated from %s:%d\n", current->size, current->file, current->line);
-            if (current->tag != NULL) {
-                printf("\tTag: %s\n", current->tag);
-            }
-            current = current->next;
-        }
-    }
-
-    if (_fft_state.mem.usage_current != 0) {
-        printf("Memory leak detected: %zu bytes remaining\n", _fft_state.mem.usage_current);
-        printf("Memory usage peak: %0.2fMB\n", FFT_BYTES_TO_MB(_fft_state.mem.usage_peak));
-        printf("Memory usage total: %0.2fMB\n", FFT_BYTES_TO_MB(_fft_state.mem.usage_total));
-        printf("Memory allocations: %zu\n", _fft_state.mem.allocations_total);
-    }
-}
-
-static void* fft_mem_alloc(size_t size, const char* file, int32_t line, const char* tag) {
-    fft_mem_alloc_header_t* header = calloc(1, sizeof(fft_mem_alloc_header_t) + size);
-    FFT_ASSERT(header != NULL, "Failed to allocate memory");
-
-    header->size = size;
-    header->file = file;
-    header->line = line;
-    header->tag = tag;
-
-    header->next = allocations_head;
-    allocations_head = header;
-
-    _fft_state.mem.usage_current += size;
-    _fft_state.mem.usage_peak = FFT_MAX(_fft_state.mem.usage_peak, _fft_state.mem.usage_current);
-    _fft_state.mem.usage_total += size;
-    _fft_state.mem.allocations_total++;
-    _fft_state.mem.allocations_current++;
-
-    return (void*)(header + 1);
-}
-
-static void fft_mem_free(void* ptr) {
-    if (ptr == NULL) {
-        return;
-    }
-
-    fft_mem_alloc_header_t* header = ((fft_mem_alloc_header_t*)ptr) - 1;
-
-    // Remove from the linked list
-    fft_mem_alloc_header_t** current = &allocations_head;
-    while (*current) {
-        if (*current == header) {
-            *current = header->next;
-            break;
-        }
-        current = &((*current)->next);
-    }
-
-    _fft_state.mem.allocations_current--;
-    _fft_state.mem.usage_current -= header->size;
-
-    free(header);
-}
-
 /*
 ================================================================================
 IO/Filesystem Implementation
@@ -473,25 +247,8 @@ IO/Filesystem Implementation
 The io module provides access to the FFT BIN filesystem. This is not for general
 purpose filesystem access.
 
-Usage:
-    ```c
-    fft_io_init("fft.bin"); // Once, during application start
-
-    fft_span_t span = fft_io_open(F_BATTLE_BIN);
-    // Do some work
-    fft_io_close(span);
-
-    fft_io_shutdown(); // During application stop
-    ```
-
 ================================================================================
 */
-
-enum {
-    FFT_IO_SECTOR_SIZE = 2048,
-    FFT_IO_SECTOR_SIZE_RAW = 2352,
-    FFT_IO_SECTOR_HEADER_SIZE = 24,
-};
 
 // FFT_IO_INDEX is a list of most files in the filesystem from the original PSX
 // bin file. They are stored in this macro so we can generate the enum and the
@@ -899,12 +656,6 @@ enum {
     X(F_WORLD__WLDTEX_TM2, 73000, 274432, "WORLD/WLDTEX.TM2")      \
     X(F_WORLD__WORLD_BIN, 84261, 973144, "WORLD/WORLD.BIN")
 
-typedef struct {
-    uint32_t sector;
-    uint32_t size;
-    char* name;
-} fft_io_desc_t;
-
 // This is an enum of all files in the filesystem. This is useful for
 // referencing files in the filesystem and allowing indexing into file_list
 //
@@ -921,6 +672,250 @@ typedef enum {
 #undef X
         F_FILE_COUNT // Automatically represents the count of files
 } fft_io_entry_e;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // FFT_H
+
+/*
+================================================================================
+                                 IMPLEMENTATION
+
+                                 IMPLEMENTATION
+
+                                 IMPLEMENTATION
+================================================================================
+*/
+
+#ifdef FFT_IMPLEMENTATION
+
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/*
+================================================================================
+Global State
+================================================================================
+ */
+
+// WARNING: This is not thread-safe and should be used in a single-threaded context.
+static struct {
+    struct {
+        FILE* file; // The main file handle for the FFT binary.
+    } io;
+
+    struct {
+        size_t usage_peak;
+        size_t usage_total;
+        size_t usage_current;
+        size_t allocations_total;
+        size_t allocations_current;
+    } mem;
+} _fft_state;
+
+/*
+================================================================================
+Defines
+================================================================================
+ */
+
+// You can define these to change the memory allocation functions used by the library.
+//
+// #define FFT_MEM_ALLOC(size) malloc(size)
+// #define FFT_MEM_ALLOC_TAG(size, tag) malloc(size)
+// #define FFT_MEM_FREE(ptr) free(ptr)
+#ifndef FFT_MEM_ALLOC
+#    define FFT_MEM_ALLOC(size)          fft_mem_alloc(size, __FILE__, __LINE__, NULL);
+#    define FFT_MEM_ALLOC_TAG(size, tag) fft_mem_alloc(size, __FILE__, __LINE__, tag);
+#    define FFT_MEM_FREE(ptr)            fft_mem_free(ptr)
+#endif
+
+// Macros for min/max operations.
+#define FFT_MAX(a, b) ((a) > (b) ? (a) : (b))
+#define FFT_MIN(a, b) ((a) < (b) ? (a) : (b))
+
+// Bytes to kilobytes and megabytes.
+#define FFT_BYTES_TO_KB(x) ((double)(x) / 1024.0)
+#define FFT_BYTES_TO_MB(x) ((double)(x) / (1024.0 * 1024.0))
+
+// Usage:
+//   assert(condition, "Simple message");
+//   assert(condition, "Formatted message: %d, %s", value1, value2);
+#define FFT_ASSERT(cond, ...)                                   \
+    do {                                                        \
+        if (!(cond)) {                                          \
+            fprintf(stderr, "Assertion failed: " __VA_ARGS__);  \
+            fprintf(stderr, " at %s:%d\n", __FILE__, __LINE__); \
+            exit(EXIT_FAILURE);                                 \
+        }                                                       \
+    } while (0)
+
+/*
+================================================================================
+Utilities Implementation
+================================================================================
+ */
+
+static uint16_t fft_util_parse_u16(uint8_t* bytes) {
+    return (uint16_t)bytes[0] | (uint16_t)((uint16_t)bytes[1] << 8);
+}
+
+static uint32_t fft_util_parse_u32(uint8_t* bytes) {
+    return (uint32_t)(bytes[0]) | ((uint32_t)(bytes[1]) << 8) | ((uint32_t)(bytes[2]) << 16) | ((uint32_t)(bytes[3]) << 24);
+}
+
+/*
+================================================================================
+Span Implementation
+================================================================================
+ */
+
+enum {
+    // This is the size of a map texture, which is the largest file size we read.
+    FFT_SPAN_MAX_BYTES = 131072,
+};
+
+typedef struct {
+    const uint8_t* data;
+    size_t size;
+    size_t offset;
+} fft_span_t;
+
+static void fft_span_read_bytes(fft_span_t* f, size_t size, uint8_t* out_bytes) {
+    FFT_ASSERT(size <= FFT_SPAN_MAX_BYTES, "Too many bytes requested.");
+    memcpy(out_bytes, &f->data[f->offset], size);
+    f->offset += size;
+    return;
+}
+
+// FN_SPAN_READ is a macro that generates a read function for a specific type. It
+// reads the value, returns it and increments the offset.
+#define FFT_FN_SPAN_READ(name, type)                                                  \
+    static type fft_span_read_##name(fft_span_t* span) {                              \
+        FFT_ASSERT(span->offset + sizeof(type) <= span->size, "Out of bounds read."); \
+        type value;                                                                   \
+        memcpy(&value, &span->data[span->offset], sizeof(type));                      \
+        span->offset += sizeof(type);                                                 \
+        return value;                                                                 \
+    }
+
+FFT_FN_SPAN_READ(u8, uint8_t)
+FFT_FN_SPAN_READ(u16, uint16_t)
+FFT_FN_SPAN_READ(u32, uint32_t)
+FFT_FN_SPAN_READ(i8, int8_t)
+FFT_FN_SPAN_READ(i16, int16_t)
+FFT_FN_SPAN_READ(i32, int32_t)
+
+/*
+================================================================================
+Memory Implementation
+================================================================================
+ */
+
+typedef struct fft_mem_alloc_header_t {
+    size_t size;
+    int32_t line;
+    const char* file;
+    const char* tag;
+    struct fft_mem_alloc_header_t* next;
+} fft_mem_alloc_header_t;
+
+static fft_mem_alloc_header_t* allocations_head = NULL;
+
+static void fft_mem_init(void) {
+    _fft_state.mem.usage_peak = 0;
+    _fft_state.mem.usage_total = 0;
+    _fft_state.mem.usage_current = 0;
+    _fft_state.mem.allocations_total = 0;
+    _fft_state.mem.allocations_current = 0;
+}
+
+static void fft_mem_shutdown(void) {
+    if (_fft_state.mem.allocations_current != 0) {
+        printf("Memory leak detected: %zu allocations remaining\n", _fft_state.mem.allocations_current);
+        fft_mem_alloc_header_t* current = allocations_head;
+        while (current) {
+            printf("Leaked %zu bytes allocated from %s:%d\n", current->size, current->file, current->line);
+            if (current->tag != NULL) {
+                printf("\tTag: %s\n", current->tag);
+            }
+            current = current->next;
+        }
+    }
+
+    if (_fft_state.mem.usage_current != 0) {
+        printf("Memory leak detected: %zu bytes remaining\n", _fft_state.mem.usage_current);
+        printf("Memory usage peak: %0.2fMB\n", FFT_BYTES_TO_MB(_fft_state.mem.usage_peak));
+        printf("Memory usage total: %0.2fMB\n", FFT_BYTES_TO_MB(_fft_state.mem.usage_total));
+        printf("Memory allocations: %zu\n", _fft_state.mem.allocations_total);
+    }
+}
+
+static void* fft_mem_alloc(size_t size, const char* file, int32_t line, const char* tag) {
+    fft_mem_alloc_header_t* header = calloc(1, sizeof(fft_mem_alloc_header_t) + size);
+    FFT_ASSERT(header != NULL, "Failed to allocate memory");
+
+    header->size = size;
+    header->file = file;
+    header->line = line;
+    header->tag = tag;
+
+    header->next = allocations_head;
+    allocations_head = header;
+
+    _fft_state.mem.usage_current += size;
+    _fft_state.mem.usage_peak = FFT_MAX(_fft_state.mem.usage_peak, _fft_state.mem.usage_current);
+    _fft_state.mem.usage_total += size;
+    _fft_state.mem.allocations_total++;
+    _fft_state.mem.allocations_current++;
+
+    return (void*)(header + 1);
+}
+
+static void fft_mem_free(void* ptr) {
+    if (ptr == NULL) {
+        return;
+    }
+
+    fft_mem_alloc_header_t* header = ((fft_mem_alloc_header_t*)ptr) - 1;
+
+    // Remove from the linked list
+    fft_mem_alloc_header_t** current = &allocations_head;
+    while (*current) {
+        if (*current == header) {
+            *current = header->next;
+            break;
+        }
+        current = &((*current)->next);
+    }
+
+    _fft_state.mem.allocations_current--;
+    _fft_state.mem.usage_current -= header->size;
+
+    free(header);
+}
+
+/*
+================================================================================
+IO/Filesystem Implementation
+================================================================================
+*/
+
+enum {
+    FFT_IO_SECTOR_SIZE = 2048,
+    FFT_IO_SECTOR_SIZE_RAW = 2352,
+    FFT_IO_SECTOR_HEADER_SIZE = 24,
+};
+
+typedef struct {
+    uint32_t sector;
+    uint32_t size;
+    char* name;
+} fft_io_desc_t;
 
 // This is a list of description for all files in the filesystem.
 //
