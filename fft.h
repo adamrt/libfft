@@ -698,6 +698,20 @@ typedef enum {
         F_FILE_COUNT // Automatically represents the count of files
 } fft_io_entry_e;
 
+/*
+================================================================================
+Images
+================================================================================
+*/
+
+typedef struct {
+    uint32_t width;
+    uint32_t height;
+    size_t size;
+    uint8_t* data;
+    bool valid;
+} fft_image_t;
+
 #ifdef __cplusplus
 }
 #endif
@@ -1132,6 +1146,133 @@ const char* fft_recordtype_str(fft_recordtype_e value) {
     }
 }
 
+/*
+================================================================================
+Images Implementation
+================================================================================
+*/
+
+// This function reads the 4bpp data from the span and converts it to a 32bpp image.
+//
+// The resulting image will be grayscale, with each pixel represented by four bytes (RGBA).
+// The pixel values will be used in a to look up the actual color in a palette (CLUT).
+static fft_image_t fft_image_read_4bpp(fft_span_t* span, uint32_t width, uint32_t height) {
+    const uint32_t dims = (width * height);
+    const uint32_t size = dims * 4;
+    const uint32_t size_on_disk = dims / 2; // two pixels per byte
+
+    uint8_t* data = FFT_MEM_ALLOC(size);
+
+    uint32_t write_idx = 0;
+    for (uint32_t i = 0; i < size_on_disk; i++) {
+        uint8_t raw_pixel = fft_span_read_u8(span);
+
+        uint8_t right = (raw_pixel & 0x0F);
+        uint8_t left = (raw_pixel & 0xF0) >> 4;
+
+        // Repeat each pixel 4 times to convert from 4bpp to 32bpp.
+        for (uint32_t j = 0; j < 4; j++) {
+            data[write_idx++] = right;
+        }
+
+        for (uint32_t j = 0; j < 4; j++) {
+            data[write_idx++] = left;
+        }
+    }
+
+    fft_image_t image = { 0 };
+    image.width = width;
+    image.height = height;
+    image.data = data;
+    image.size = size;
+    image.valid = true;
+
+    return image;
+}
+
+static fft_image_t fft_image_read_16bpp(fft_span_t* span, uint32_t width, uint32_t height) {
+    const uint32_t dims = width * height;
+    const uint32_t size = dims * 4;
+
+    uint8_t* data = FFT_MEM_ALLOC(size);
+
+    uint32_t write_idx = 0;
+    for (uint32_t i = 0; i < dims; i++) {
+        uint16_t val = fft_span_read_u16(span);
+
+        data[write_idx++] = (uint8_t)((val & 0x001F) << 3);      // R
+        data[write_idx++] = (uint8_t)((val & 0x03E0) >> 2);      // G
+        data[write_idx++] = (uint8_t)((val & 0x7C00) >> 7);      // B
+        data[write_idx++] = (uint8_t)((val == 0) ? 0x00 : 0xFF); // A
+    }
+
+    fft_image_t image = { 0 };
+    image.width = width;
+    image.height = height;
+    image.data = data;
+    image.size = size;
+    image.valid = true;
+
+    return image;
+}
+
+// Take a 4bpp image and a 16bpp palette (CLUT) and convert the image to a
+// palettized format.
+static void fft_image_palettize(fft_image_t* image, const fft_image_t* palette) {
+    const uint32_t pixel_count = image->width * image->height;
+
+    for (uint32_t i = 0; i < pixel_count * 4; i = i + 4) {
+        uint8_t pixel = image->data[i];
+        memcpy(&image->data[i], &palette->data[pixel * 4], 4);
+    }
+}
+
+// This will scale the image data from 4bpp to 32bpp by multiplying each pixel
+// value by 16. This is useful for debugging since the max value of 4bpp is 15,
+// and we want to scale it to 255 (15*17 = 255).
+static void fft_image_scale_paletted(fft_image_t* image) {
+    if (!image || !image->valid || !image->data) {
+        return;
+    }
+
+    const uint32_t pixel_count = image->width * image->height;
+
+    for (uint32_t i = 0; i < pixel_count; i++) {
+        uint8_t* px = &image->data[i * 4];
+
+        // Scale each RGB channel from [0..15] → [0..255]
+        px[0] = px[0] * 17; // R
+        px[1] = px[1] * 17; // G
+        px[2] = px[2] * 17; // B
+        px[3] = 0xFF;       // A
+    }
+}
+
+static bool fft_image_write_ppm(const fft_image_t* image, const char* path) {
+    if (!image || !image->valid || !image->data) {
+        return false;
+    }
+
+    FILE* f = fopen(path, "wb");
+    if (!f) {
+        return false;
+    }
+
+    // Write PPM header (P6 = binary RGB)
+    // Max color value is 255
+    fprintf(f, "P6\n%d %d\n255\n", image->width, image->height);
+
+    // Write RGB data (ignore alpha)
+    for (uint32_t y = 0; y < image->height; y++) {
+        for (uint32_t x = 0; x < image->width; x++) {
+            uint8_t* px = &image->data[(y * image->width + x) * 4];
+            fwrite(px, 1, 3, f); // only write R,G,B
+        }
+    }
+
+    fclose(f);
+    return true;
+}
 /*
 ================================================================================
 Entrypoint Implementation
