@@ -25,4 +25,5 @@ echo "Building..."
 make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 echo "Build completed successfully!"
-echo "Executable: build/main"
+echo "Executable: build/fft_debug"
+echo "Executable: build/fft_export_images"
