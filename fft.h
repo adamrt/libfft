@@ -772,6 +772,89 @@ const fft_image_desc_t image_desc_list[FFT_IMAGE_DESC_COUNT] = {
 
 static fft_image_desc_t image_get_desc(fft_io_entry_e entry);
 
+/*
+================================================================================
+Geometry
+================================================================================
+*/
+
+enum {
+    FFT_MESH_MAX_TEX_TRIS = 512,
+    FFT_MESH_MAX_TEX_QUADS = 768,
+    FFT_MESH_MAX_UNTEX_TRIS = 64,
+    FFT_MESH_MAX_UNTEX_QUADS = 256,
+    FFT_MESH_MAX_POLYGONS = FFT_MESH_MAX_TEX_TRIS + FFT_MESH_MAX_TEX_QUADS + FFT_MESH_MAX_UNTEX_TRIS + FFT_MESH_MAX_UNTEX_QUADS,
+};
+
+typedef struct {
+    int16_t x, y, z;
+} fft_position_t;
+
+// Normals are stored in fixed-point format with 16 bits for each component. If
+// you want to use f32 normals, you can convert them with a helper function.
+typedef struct {
+    fft_fixed16_t x, y, z;
+} fft_normal_t;
+
+typedef struct {
+    uint8_t u, v;
+} fft_texcoord_t;
+
+typedef struct {
+    fft_position_t position;
+    fft_normal_t normal;
+    fft_texcoord_t texcoord;
+} fft_vertex_t;
+
+typedef enum {
+    FFT_POLYTYPE_TRIANGLE,
+    FFT_POLYTYPE_QUAD,
+} fft_polytype_e;
+
+typedef struct {
+    fft_texcoord_t texcoords[4]; // Up to 4 texcoords for quads
+    uint8_t palette;
+    uint8_t page;
+    // image_to_use: 3 == texture map, other values are for UI, fonts, icons
+    uint8_t image_to_use;
+
+    uint8_t unknown_a; // maps almost always have this set to 0x78 / 120dec
+    uint8_t unknown_b; // 4 high bits from image_to_use
+    uint8_t unknown_c;
+    bool is_textured; // true if the polygon is textured, false if it is untextured
+} fft_texinfo_t;
+
+// The purpose of this data is unknown, but we know there are 4 bytes for each
+// untextured polygon.
+typedef struct {
+    uint8_t unknown_a;
+    uint8_t unknown_b;
+    uint8_t unknown_c;
+    uint8_t unknown_d;
+} fft_untexinfo_t;
+
+typedef struct {
+    uint8_t x;
+    uint8_t z;
+    uint8_t elevation;
+} fft_tileinfo_t;
+
+typedef struct {
+    fft_polytype_e type;
+    fft_vertex_t vertices[4];
+
+    fft_texinfo_t tex;
+    fft_untexinfo_t untex;
+    fft_tileinfo_t tiles;
+} polygon_t;
+
+typedef struct {
+    polygon_t polygons[FFT_MESH_MAX_POLYGONS];
+    bool valid;
+} fft_geometry_t;
+
+static fft_geometry_t read_geometry(fft_span_t* span);
+
 #ifdef __cplusplus
 }
 #endif
@@ -1343,11 +1426,190 @@ static bool fft_image_write_ppm(const fft_image_t* image, const char* path) {
     fclose(f);
     return true;
 }
+
+/*
+================================================================================
+Geometry Implementation
+================================================================================
+*/
+
+static fft_position_t fft_geometry_read_position(fft_span_t* span) {
+    int16_t x = fft_span_read_i16(span);
+    int16_t y = fft_span_read_i16(span);
+    int16_t z = fft_span_read_i16(span);
+    return (fft_position_t) { x, y, z };
+}
+
+static fft_normal_t fft_geometry_read_normal(fft_span_t* span) {
+    fft_fixed16_t x = fft_span_read_i16(span);
+    fft_fixed16_t y = fft_span_read_i16(span);
+    fft_fixed16_t z = fft_span_read_i16(span);
+    return (fft_normal_t) { x, y, z };
+}
+
+static void _read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, bool is_textured, uint32_t* poly_offset, uint32_t count) {
+    for (uint32_t i = 0; i < count; i++) {
+        polygon_t* poly = &g->polygons[*poly_offset + count];
+        poly->tex.is_textured = is_textured;
+        poly->type = type;
+
+        // Read vertices
+        for (uint32_t j = 0; j < (type == FFT_POLYTYPE_TRIANGLE ? 3 : 4); j++) {
+            poly->vertices[j].position = fft_geometry_read_position(span);
+        }
+    }
+
+    *poly_offset += count;
+}
+
+static void _read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t* poly_offset, uint32_t count) {
+    for (uint32_t i = 0; i < count; i++) {
+        polygon_t* poly = &g->polygons[*poly_offset + i];
+        for (uint32_t j = 0; j < (type == FFT_POLYTYPE_TRIANGLE ? 3 : 4); j++) {
+            poly->vertices[j].normal = fft_geometry_read_normal(span);
+        }
+    }
+
+    *poly_offset += count;
+}
+
+static void _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t* poly_offset, uint32_t count) {
+    for (uint32_t i = 0; i < count; i++) {
+        uint8_t au = fft_span_read_u8(span);             // 0
+        uint8_t av = fft_span_read_u8(span);             // 1
+        uint8_t palette = fft_span_read_u8(span);        // 2
+        uint8_t unknown_a = fft_span_read_u8(span);      // 3
+        uint8_t bu = fft_span_read_u8(span);             // 4
+        uint8_t bv = fft_span_read_u8(span);             // 5
+        uint8_t image_and_page = fft_span_read_u8(span); // 6
+        // unknown_b comes from image_and_page
+        uint8_t unknown_c = fft_span_read_u8(span); // 7
+        uint8_t cu = fft_span_read_u8(span);        // 8
+        uint8_t cv = fft_span_read_u8(span);        // 9
+
+        // Split image_and_page into its components.
+        uint8_t page = image_and_page & 0x03;                // bits 0–1  (0b00000011)
+        uint8_t image_to_use = (image_and_page >> 2) & 0x03; // bits 2–3  (0b00001100)
+        uint8_t unknown_b = (image_and_page >> 4) & 0x0F;    // bits 4–7  (0b11110000)
+
+        g->polygons[*poly_offset + i].tex.palette = palette;
+        g->polygons[*poly_offset + i].tex.page = page;
+        g->polygons[*poly_offset + i].tex.image_to_use = image_to_use;
+        g->polygons[*poly_offset + i].tex.unknown_a = unknown_a;
+        g->polygons[*poly_offset + i].tex.unknown_b = unknown_b;
+        g->polygons[*poly_offset + i].tex.unknown_c = unknown_c;
+        g->polygons[*poly_offset + i].tex.texcoords[0].u = au;
+        g->polygons[*poly_offset + i].tex.texcoords[0].v = av;
+        g->polygons[*poly_offset + i].tex.texcoords[1].u = bu;
+        g->polygons[*poly_offset + i].tex.texcoords[1].v = bv;
+        g->polygons[*poly_offset + i].tex.texcoords[2].u = cu;
+        g->polygons[*poly_offset + i].tex.texcoords[2].v = cv;
+
+        if (type == FFT_POLYTYPE_QUAD) {
+            uint8_t du = fft_span_read_u8(span);
+            uint8_t dv = fft_span_read_u8(span);
+            g->polygons[*poly_offset + i].tex.texcoords[3].u = du;
+            g->polygons[*poly_offset + i].tex.texcoords[3].v = dv;
+        }
+    }
+
+    *poly_offset += count;
+}
+
+static void _read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t* poly_offset, uint32_t count) {
+    for (uint32_t i = 0; i < count; i++) {
+        uint8_t unknown_a = fft_span_read_u8(span); // 0
+        uint8_t unknown_b = fft_span_read_u8(span); // 1
+        uint8_t unknown_c = fft_span_read_u8(span); // 2
+        uint8_t unknown_d = fft_span_read_u8(span); // 3
+
+        g->polygons[*poly_offset + i].untex.unknown_a = unknown_a;
+        g->polygons[*poly_offset + i].untex.unknown_b = unknown_b;
+        g->polygons[*poly_offset + i].untex.unknown_c = unknown_c;
+        g->polygons[*poly_offset + i].untex.unknown_d = unknown_d;
+    }
+
+    *poly_offset += count;
+}
+
+static void _read_tile_locations(fft_span_t* span, fft_geometry_t* g, uint32_t* poly_offset, uint32_t count) {
+    for (uint32_t i = 0; i < count; i++) {
+        uint8_t zy = fft_span_read_u8(span);
+        uint8_t z = (zy >> 1) & 0xFE; // 0b11111110
+        uint8_t y = (zy >> 0) & 0x01; // 0b00000001
+        uint8_t x = fft_span_read_u8(span);
+        g->polygons[*poly_offset + i].tiles.x = x;
+        g->polygons[*poly_offset + i].tiles.z = z;
+        g->polygons[*poly_offset + i].tiles.elevation = y;
+    }
+    *poly_offset += count;
+}
+
+static fft_geometry_t read_geometry(fft_span_t* span) {
+    fft_geometry_t geometry = { 0 };
+
+    // 0x40 is always the location of the primary mesh pointer.
+    // 0xC4 is always the primary mesh pointer.
+    span->offset = 0x40;
+    uint32_t offset = fft_span_read_u32(span);
+    span->offset = offset;
+    if (span->offset == 0) {
+        return geometry;
+    }
+
+    // The number of each type of polygon.
+    uint16_t N = fft_span_read_u16(span); // Textured triangles
+    uint16_t P = fft_span_read_u16(span); // Textured quads
+    uint16_t Q = fft_span_read_u16(span); // Untextured triangles
+    uint16_t R = fft_span_read_u16(span); // Untextured quads
+
+    // Validate maximum values
+    FFT_ASSERT(N < FFT_MESH_MAX_TEX_TRIS, "Mesh textured triangle count exceeded");
+    FFT_ASSERT(P < FFT_MESH_MAX_TEX_QUADS, "Mesh textured quad count exceeded");
+    FFT_ASSERT(Q < FFT_MESH_MAX_UNTEX_TRIS, "Mesh untextured triangle count exceeded");
+    FFT_ASSERT(R < FFT_MESH_MAX_UNTEX_QUADS, "Mesh untextured quad count exceeded");
+
+    // poly_offset is used to track the current offset in the polygons array. We
+    // pass it around and let the functions increase it by the count. It gets
+    // reset to 0 most of the time because most of this data is for the textured
+    // polygons,which come first.
+    uint32_t poly_offset = 0;
+
+    // Polygons
+    _read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, &poly_offset, N);
+    _read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, &poly_offset, P);
+    _read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, &poly_offset, Q);
+    _read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, &poly_offset, R);
+
+    // Normals
+    poly_offset = 0; // Reset for normals
+    _read_normals(span, &geometry, FFT_POLYTYPE_TRIANGLE, &poly_offset, N);
+    _read_normals(span, &geometry, FFT_POLYTYPE_QUAD, &poly_offset, P);
+
+    // Texture Coordinates
+    poly_offset = 0; // Reset for texture coordinates
+    _read_texinfo(span, &geometry, FFT_POLYTYPE_TRIANGLE, &poly_offset, N);
+    _read_texinfo(span, &geometry, FFT_POLYTYPE_QUAD, &poly_offset, P);
+
+    // Unknown Untextured Polygon Data
+    poly_offset = N + P; // Reset for untextured polygons
+    _read_untexinfo(span, &geometry, &poly_offset, Q);
+    _read_untexinfo(span, &geometry, &poly_offset, R);
+
+    // Tile Locations
+    poly_offset = 0; // Reset for terrain locations
+    _read_tile_locations(span, &geometry, &poly_offset, N);
+    _read_tile_locations(span, &geometry, &poly_offset, P);
+
+    geometry.valid = true;
+    return geometry;
+}
+
 /*
 ================================================================================
 Entrypoint Implementation
 ================================================================================
- */
+*/
 
 void fft_init(const char* filename) {
     fft_mem_init();

@@ -28,6 +28,7 @@ set(COMMON_WARNINGS
     -Wstrict-prototypes
     -Wmissing-prototypes
     -Wvla
+    -Wno-unused-parameter # You can remove this if you want unused parameter warnings
     -Wno-unused-function # You can remove this if you want unused function warnings
 )
 
