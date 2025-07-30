@@ -138,118 +138,6 @@ typedef int16_t fft_fixed16_t;
 
 /*
 ================================================================================
-Map state
-================================================================================
-
-The map state represents the state of a map. A map typically has multiple meshes
-and textures for use in different events and random battles. The state is used
-to determine which resources to load based on the time of day, weather, and
-layout. Each resource has a specified state.
-
-The default state is:
-  - Time: FFT_TIME_DAY
-  - Weather: FFT_WEATHER_NONE
-  - Layout: 0
-================================================================================
-*/
-
-typedef enum {
-    FFT_TIME_DAY = 0x0,
-    FFT_TIME_NIGHT = 0x1,
-} fft_time_e;
-
-typedef enum {
-    FFT_WEATHER_NONE = 0x0,
-    FFT_WEATHER_NONE_ALT = 0x1,
-    FFT_WEATHER_NORMAL = 0x2,
-    FFT_WEATHER_STRONG = 0x3,
-    FFT_WEATHER_VERY_STRONG = 0x4,
-} fft_weather_e;
-
-// Each record is related to a specific time, weather, and layout.
-typedef struct {
-    fft_time_e time;
-    fft_weather_e weather;
-    int32_t layout;
-} fft_state_t;
-
-// Comparative functions for fft_state_t
-bool fft_state_is_equal(fft_state_t a, fft_state_t b);
-bool fft_state_is_default(fft_state_t map_state);
-
-// String representations of the enums
-const char* fft_time_str(fft_time_e value);
-const char* fft_weather_str(fft_weather_e value);
-
-/*
-================================================================================
-Map/GNS records
-================================================================================
-
-Each map has a single GNS file. These files contains a varying number of 20-byte
-records (max 40). These records describe the for the map. They have a type
-(fft_recordtype_e), which specifies if its a texture, mesh data, etc. They also
-have the weather/time/layout they are valid for. Then the location (sector) and
-size in the BIN file for that data.
-
-Each resource is a separate file in the original PSX binary if you mount the
-disk. But, we just get the sector and length, and read them directly from the
-binary, to simplify the process.
-
-We don't know the number of records ahead of time, so we read each one until the
-type is FFT_RECORDTYPE_END.
-
-Format: AA BC DD EE FF GG HH HH II JJ
-+------+---------+-------+--------------------------------------+
-| Pos  | Size    | Index | Description                          |
-+------+---------+-------+--------------------------------------+
-| AA   | 2 bytes |   0-1 | unknown, always 0x22, 0x30 or 0x70   |
-| B    | 1 bytes |     2 | room layout                          |
-| C    | 1 bytes |     3 | fft_time_e and fft_weather_e         |
-| DD   | 2 bytes |   4-5 | fft_recordtype_e                     |
-| EE   | 2 bytes |   6-7 | unknown                              |
-| FF   | 2 bytes |   8-9 | start sector                         |
-| GG   | 2 bytes | 10-11 | unknown                              |
-| HHHH | 4 bytes | 12-15 | resource size                        |
-| II   | 2 bytes | 16-17 | unknown                              |
-| JJ   | 2 bytes | 18-19 | unknown                              |
-+------+---------+-------+--------------------------------------+
-
-================================================================================
-*/
-
-enum {
-    FFT_RECORD_MAX = 40,  // Maximum number of records per map
-    FFT_RECORD_SIZE = 20, // Size of a record in bytes
-};
-
-typedef enum {
-    FFT_RECORDTYPE_NONE = 0x0000,
-    FFT_RECORDTYPE_TEXTURE = 0x1701,
-    FFT_RECORDTYPE_MESH_PRIMARY = 0x2E01,
-    FFT_RECORDTYPE_MESH_OVERRIDE = 0x2F01,
-    FFT_RECORDTYPE_MESH_ALT = 0x3001,
-    FFT_RECORDTYPE_END = 0x3101, // End of file marker
-} fft_recordtype_e;
-
-const char* fft_recordtype_str(fft_recordtype_e value);
-
-typedef struct {
-    fft_recordtype_e type;
-    fft_state_t state;
-    uint32_t sector;
-    uint32_t length;
-
-    // Padding or unknown fields
-    uint16_t aa;
-    uint16_t ee;
-    uint16_t gg;
-    uint16_t ii;
-    uint16_t jj;
-} fft_record_t;
-
-/*
-================================================================================
 Span
 ================================================================================
 
@@ -706,6 +594,118 @@ typedef enum {
 #undef X
         F_FILE_COUNT // Automatically represents the count of files
 } fft_io_entry_e;
+
+/*
+================================================================================
+Map state
+================================================================================
+
+The map state represents the state of a map. A map typically has multiple meshes
+and textures for use in different events and random battles. The state is used
+to determine which resources to load based on the time of day, weather, and
+layout. Each resource has a specified state.
+
+The default state is:
+  - Time: FFT_TIME_DAY
+  - Weather: FFT_WEATHER_NONE
+  - Layout: 0
+================================================================================
+*/
+
+typedef enum {
+    FFT_TIME_DAY = 0x0,
+    FFT_TIME_NIGHT = 0x1,
+} fft_time_e;
+
+typedef enum {
+    FFT_WEATHER_NONE = 0x0,
+    FFT_WEATHER_NONE_ALT = 0x1,
+    FFT_WEATHER_NORMAL = 0x2,
+    FFT_WEATHER_STRONG = 0x3,
+    FFT_WEATHER_VERY_STRONG = 0x4,
+} fft_weather_e;
+
+// Each record is related to a specific time, weather, and layout.
+typedef struct {
+    fft_time_e time;
+    fft_weather_e weather;
+    int32_t layout;
+} fft_state_t;
+
+// Comparative functions for fft_state_t
+bool fft_state_is_equal(fft_state_t a, fft_state_t b);
+bool fft_state_is_default(fft_state_t map_state);
+
+// String representations of the enums
+const char* fft_time_str(fft_time_e value);
+const char* fft_weather_str(fft_weather_e value);
+
+/*
+================================================================================
+Map/GNS records
+================================================================================
+
+Each map has a single GNS file. These files contains a varying number of 20-byte
+records (max 40). These records describe the for the map. They have a type
+(fft_recordtype_e), which specifies if its a texture, mesh data, etc. They also
+have the weather/time/layout they are valid for. Then the location (sector) and
+size in the BIN file for that data.
+
+Each resource is a separate file in the original PSX binary if you mount the
+disk. But, we just get the sector and length, and read them directly from the
+binary, to simplify the process.
+
+We don't know the number of records ahead of time, so we read each one until the
+type is FFT_RECORDTYPE_END.
+
+Format: AA BC DD EE FF GG HH HH II JJ
++------+---------+-------+--------------------------------------+
+| Pos  | Size    | Index | Description                          |
++------+---------+-------+--------------------------------------+
+| AA   | 2 bytes |   0-1 | unknown, always 0x22, 0x30 or 0x70   |
+| B    | 1 bytes |     2 | room layout                          |
+| C    | 1 bytes |     3 | fft_time_e and fft_weather_e         |
+| DD   | 2 bytes |   4-5 | fft_recordtype_e                     |
+| EE   | 2 bytes |   6-7 | unknown                              |
+| FF   | 2 bytes |   8-9 | start sector                         |
+| GG   | 2 bytes | 10-11 | unknown                              |
+| HHHH | 4 bytes | 12-15 | resource size                        |
+| II   | 2 bytes | 16-17 | unknown                              |
+| JJ   | 2 bytes | 18-19 | unknown                              |
++------+---------+-------+--------------------------------------+
+
+================================================================================
+*/
+
+enum {
+    FFT_RECORD_MAX = 40,  // Maximum number of records per map
+    FFT_RECORD_SIZE = 20, // Size of a record in bytes
+};
+
+typedef enum {
+    FFT_RECORDTYPE_NONE = 0x0000,
+    FFT_RECORDTYPE_TEXTURE = 0x1701,
+    FFT_RECORDTYPE_MESH_PRIMARY = 0x2E01,
+    FFT_RECORDTYPE_MESH_OVERRIDE = 0x2F01,
+    FFT_RECORDTYPE_MESH_ALT = 0x3001,
+    FFT_RECORDTYPE_END = 0x3101, // End of file marker
+} fft_recordtype_e;
+
+const char* fft_recordtype_str(fft_recordtype_e value);
+
+typedef struct {
+    fft_recordtype_e type;
+    fft_state_t state;
+    uint32_t sector;
+    uint32_t length;
+
+    // Padding or unknown fields
+    uint16_t aa;
+    uint16_t ee;
+    uint16_t gg;
+    uint16_t ii;
+    uint16_t jj;
+} fft_record_t;
 
 /*
 ================================================================================
