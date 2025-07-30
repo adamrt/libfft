@@ -704,6 +704,17 @@ Images
 ================================================================================
 */
 
+enum {
+    FFT_IMAGE_DESC_COUNT = 10, // Number of image descriptors
+};
+
+typedef enum {
+    FFT_IMAGETYPE_4BPP,
+    FFT_IMAGETYPE_4BPP_PAL,
+    FFT_IMAGETYPE_8BPP,
+    FFT_IMAGETYPE_16BPP,
+} fft_image_type_e;
+
 typedef struct {
     uint32_t width;
     uint32_t height;
@@ -711,6 +722,40 @@ typedef struct {
     uint8_t* data;
     bool valid;
 } fft_image_t;
+
+typedef struct {
+    char* name;
+    fft_io_entry_e entry;
+    fft_image_type_e type;
+
+    uint32_t width;
+    uint32_t height;
+
+    size_t data_offset;
+    size_t data_length;
+
+    size_t pal_offset;
+    size_t pal_length;
+    uint32_t pal_count;
+    uint32_t pal_default;
+} fft_image_desc_t;
+
+// clang-format off
+const fft_image_desc_t image_desc_list[FFT_IMAGE_DESC_COUNT] = {
+    { .name = "FRAME.BIN",    .entry = F_EVENT__FRAME_BIN,    .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 288, .pal_offset = 36864, .pal_count = 22, .pal_default = 5,},
+    { .name = "ITEM.BIN",     .entry = F_EVENT__ITEM_BIN,     .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 256, .pal_offset = 32768, .pal_count = 16 },
+    { .name = "UNIT.BIN",     .entry = F_EVENT__UNIT_BIN,     .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 480, .pal_offset = 61440, .pal_count = 128,},
+    { .name = "BONUS.BIN",    .entry = F_EVENT__BONUS_BIN,    .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 200, .pal_offset = 25600, .pal_count = 16,},
+    { .name = "WLDFACE4.BIN", .entry = F_EVENT__WLDFACE4_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 240, .pal_offset = 30720, .pal_count = 64,},
+    { .name = "CHAPTER1.BIN", .entry = F_EVENT__CHAPTER1_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1,},
+    { .name = "CHAPTER2.BIN", .entry = F_EVENT__CHAPTER2_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1,},
+    { .name = "CHAPTER3.BIN", .entry = F_EVENT__CHAPTER3_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1,},
+    { .name = "CHAPTER4.BIN", .entry = F_EVENT__CHAPTER4_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1,},
+    { .name = "OTHER.SPR",    .entry = F_BATTLE__OTHER_SPR,   .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 256, .pal_offset = 0,     .pal_count = 32, .data_offset = 1024,},
+};
+// clang-format on
+
+static fft_image_desc_t image_get_desc(fft_io_entry_e entry);
 
 #ifdef __cplusplus
 }
@@ -1152,6 +1197,11 @@ Images Implementation
 ================================================================================
 */
 
+enum {
+    FFT_IMAGE_PAL_COL_COUNT = 16,                         // Each palette entry is 16 bytes (RGBA)
+    FFT_IMAGE_PAL_ROW_SIZE = FFT_IMAGE_PAL_COL_COUNT * 4, // 4 bytes per color
+};
+
 // This function reads the 4bpp data from the span and converts it to a 32bpp image.
 //
 // The resulting image will be grayscale, with each pixel represented by four bytes (RGBA).
@@ -1218,13 +1268,44 @@ static fft_image_t fft_image_read_16bpp(fft_span_t* span, uint32_t width, uint32
 
 // Take a 4bpp image and a 16bpp palette (CLUT) and convert the image to a
 // palettized format.
-static void fft_image_palettize(fft_image_t* image, const fft_image_t* palette) {
+static void fft_image_palettize(fft_image_t* image, const fft_image_t* palette, uint8_t pal_index) {
     const uint32_t pixel_count = image->width * image->height;
+    const uint32_t pal_offset = (FFT_IMAGE_PAL_ROW_SIZE * pal_index);
 
     for (uint32_t i = 0; i < pixel_count * 4; i = i + 4) {
         uint8_t pixel = image->data[i];
-        memcpy(&image->data[i], &palette->data[pixel * 4], 4);
+        memcpy(&image->data[i], &palette->data[pal_offset + (pixel * 4)], 4);
     }
+}
+
+static fft_image_t fft_image_read_4bpp_palettized(fft_span_t* span, fft_image_desc_t desc, uint8_t pal_index) {
+    // Read the 4bpp image data.
+    fft_image_t image = fft_image_read_4bpp(span, desc.width, desc.height);
+
+    // Read the palette (CLUT) data.
+    span->offset = desc.pal_offset;
+    fft_image_t palette = fft_image_read_16bpp(span, FFT_IMAGE_PAL_COL_COUNT, desc.pal_count);
+
+    fft_image_palettize(&image, &palette, pal_index);
+
+    // Free the palette data.
+    FFT_MEM_FREE(palette.data);
+
+    return image;
+}
+
+static fft_image_desc_t image_get_desc(fft_io_entry_e entry) {
+    fft_image_desc_t found = { 0 };
+    for (uint32_t i = 0; i < FFT_IMAGE_DESC_COUNT; i++) {
+        if (image_desc_list[i].entry == entry) {
+            // FIXME: This is just a development saftey measure. Might be better
+            // to find by name since there can be multiple desc per file.
+            FFT_ASSERT(found.entry == 0, "Duplicate image descriptor for entry %d", entry);
+            found = image_desc_list[i];
+        }
+    }
+    FFT_ASSERT(found.entry != 0, "Image descriptor not found for entry %d", entry);
+    return found;
 }
 
 // This will scale the image data from 4bpp to 32bpp by multiplying each pixel

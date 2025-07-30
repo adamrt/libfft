@@ -37,3 +37,6 @@ add_compile_options(${COMMON_WARNINGS})
 # Add main executable
 add_executable(main tools/main.c)
 target_include_directories(main PRIVATE .)
+
+add_executable(fft_export_images tools/fft_export_images.c)
+target_include_directories(fft_export_images PRIVATE .)
