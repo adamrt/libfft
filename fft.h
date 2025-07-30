@@ -705,7 +705,7 @@ Images
 */
 
 enum {
-    FFT_IMAGE_DESC_COUNT = 10, // Number of image descriptors
+    FFT_IMAGE_DESC_COUNT = 12, // Number of image descriptors
 };
 
 typedef enum {
@@ -738,20 +738,26 @@ typedef struct {
     size_t pal_length;
     uint32_t pal_count;
     uint32_t pal_default;
+
+    uint32_t repeat;
+    uint32_t repeat_offset;
 } fft_image_desc_t;
 
 // clang-format off
 const fft_image_desc_t image_desc_list[FFT_IMAGE_DESC_COUNT] = {
-    { .name = "FRAME.BIN",    .entry = F_EVENT__FRAME_BIN,    .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 288, .pal_offset = 36864, .pal_count = 22, .pal_default = 5,},
+    { .name = "BONUS.BIN",    .entry = F_EVENT__BONUS_BIN,    .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 200, .pal_offset = 25600, .pal_count = 6,  .repeat = 36,  .repeat_offset = 26624 },
+    { .name = "CHAPTER1.BIN", .entry = F_EVENT__CHAPTER1_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
+    { .name = "CHAPTER2.BIN", .entry = F_EVENT__CHAPTER2_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
+    { .name = "CHAPTER3.BIN", .entry = F_EVENT__CHAPTER3_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
+    { .name = "CHAPTER4.BIN", .entry = F_EVENT__CHAPTER4_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
+    { .name = "EVTCHR.BIN",   .entry = F_EVENT__EVTCHR_BIN,   .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 200, .pal_offset = 1920,  .pal_count = 7,  .repeat = 137, .repeat_offset = 30720, .data_offset = 2560 },
+    { .name = "FRAME.BIN",    .entry = F_EVENT__FRAME_BIN,    .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 288, .pal_offset = 36864, .pal_count = 22, .pal_default = 5 },
     { .name = "ITEM.BIN",     .entry = F_EVENT__ITEM_BIN,     .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 256, .pal_offset = 32768, .pal_count = 16 },
-    { .name = "UNIT.BIN",     .entry = F_EVENT__UNIT_BIN,     .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 480, .pal_offset = 61440, .pal_count = 128,},
-    { .name = "BONUS.BIN",    .entry = F_EVENT__BONUS_BIN,    .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 200, .pal_offset = 25600, .pal_count = 16,},
-    { .name = "WLDFACE4.BIN", .entry = F_EVENT__WLDFACE4_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 240, .pal_offset = 30720, .pal_count = 64,},
-    { .name = "CHAPTER1.BIN", .entry = F_EVENT__CHAPTER1_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1,},
-    { .name = "CHAPTER2.BIN", .entry = F_EVENT__CHAPTER2_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1,},
-    { .name = "CHAPTER3.BIN", .entry = F_EVENT__CHAPTER3_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1,},
-    { .name = "CHAPTER4.BIN", .entry = F_EVENT__CHAPTER4_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1,},
-    { .name = "OTHER.SPR",    .entry = F_BATTLE__OTHER_SPR,   .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 256, .pal_offset = 0,     .pal_count = 32, .data_offset = 1024,},
+    { .name = "UNIT.BIN",     .entry = F_EVENT__UNIT_BIN,     .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 480, .pal_offset = 61440, .pal_count = 128 },
+    { .name = "WLDFACE.BIN",  .entry = F_EVENT__WLDFACE_BIN,  .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 240, .pal_offset = 30720, .pal_count = 64, .repeat = 4,   .repeat_offset = 32768 },
+    { .name = "WLDFACE4.BIN", .entry = F_EVENT__WLDFACE4_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 240, .pal_offset = 30720, .pal_count = 64 },
+
+    { .name = "OTHER.SPR",    .entry = F_BATTLE__OTHER_SPR,   .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 256, .pal_offset = 0,     .pal_count = 32, .data_offset = 1024 },
 };
 // clang-format on
 
