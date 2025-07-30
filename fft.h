@@ -129,6 +129,15 @@ void fft_shutdown(void);
 
 /*
 ================================================================================
+Fixed Point Types
+================================================================================
+*/
+
+// Fixed-point types for FFT
+typedef int16_t fft_fixed16_t;
+
+/*
+================================================================================
 Map state
 ================================================================================
 
@@ -790,7 +799,7 @@ static fft_image_desc_t image_get_desc(fft_io_entry_e entry);
 ================================================================================
 Global State
 ================================================================================
- */
+*/
 
 // WARNING: This is not thread-safe and should be used in a single-threaded context.
 static struct {
@@ -811,7 +820,7 @@ static struct {
 ================================================================================
 Defines
 ================================================================================
- */
+*/
 
 // You can define these to change the memory allocation functions used by the library.
 //
@@ -846,35 +855,9 @@ Defines
 
 /*
 ================================================================================
-Utilities Implementation
-================================================================================
- */
-
-static uint16_t fft_util_parse_u16(uint8_t* bytes) {
-    return (uint16_t)bytes[0] | (uint16_t)((uint16_t)bytes[1] << 8);
-}
-
-static uint32_t fft_util_parse_u32(uint8_t* bytes) {
-    return (uint32_t)(bytes[0]) | ((uint32_t)(bytes[1]) << 8) | ((uint32_t)(bytes[2]) << 16) | ((uint32_t)(bytes[3]) << 24);
-}
-
-/*
-================================================================================
 Span Implementation
 ================================================================================
- */
-
-enum {
-    // This is the size of a map texture, which is the largest file size we read.
-    FFT_SPAN_MAX_BYTES = 131072,
-};
-
-static void fft_span_read_bytes(fft_span_t* f, size_t size, uint8_t* out_bytes) {
-    FFT_ASSERT(size <= FFT_SPAN_MAX_BYTES, "Too many bytes requested.");
-    memcpy(out_bytes, &f->data[f->offset], size);
-    f->offset += size;
-    return;
-}
+*/
 
 // FN_SPAN_READ is a macro that generates a read function for a specific type. It
 // reads the value, returns it and increments the offset.
@@ -898,7 +881,7 @@ FFT_FN_SPAN_READ(i32, int32_t)
 ================================================================================
 Memory Implementation
 ================================================================================
- */
+*/
 
 typedef struct fft_mem_alloc_header_t {
     size_t size;
@@ -1083,7 +1066,7 @@ static void fft_io_close(fft_span_t span) {
 ================================================================================
 Map state Implementation
 ================================================================================
- */
+*/
 
 static fft_state_t fft_default_state = (fft_state_t) {
     .time = FFT_TIME_DAY,
@@ -1131,23 +1114,23 @@ bool fft_state_is_default(fft_state_t map_state) {
 ================================================================================
 GNS/Records Implementation
 ================================================================================
- */
+*/
 
 static fft_record_t fft_record_read(fft_span_t* span) {
-    uint8_t bytes[FFT_RECORD_SIZE];
-    fft_span_read_bytes(span, FFT_RECORD_SIZE, bytes);
+    uint16_t aa = fft_span_read_u16(span);             // 0
+    uint8_t layout = fft_span_read_u8(span);           // 1-2
+    uint8_t time_and_weather = fft_span_read_u8(span); // 3
+    fft_recordtype_e type = fft_span_read_u16(span);   // 4-5
+    uint16_t ee = fft_span_read_u16(span);             // 6-7
+    uint32_t sector = fft_span_read_u16(span);         // 8-9
+    uint16_t gg = fft_span_read_u16(span);             // 10-11
+    uint32_t length = fft_span_read_u32(span);         // 12-15
+    uint16_t ii = fft_span_read_u16(span);             // 16-17
+    uint16_t jj = fft_span_read_u16(span);             // 18-19
 
-    uint16_t aa = fft_util_parse_u16(&bytes[0]);
-    int32_t layout = bytes[2];
-    fft_time_e time = (fft_time_e)((bytes[3] >> 7) & 0x1);
-    fft_weather_e weather = (fft_weather_e)((bytes[3] >> 4) & 0x7);
-    fft_recordtype_e type = fft_util_parse_u16(&bytes[4]);
-    uint16_t ee = fft_util_parse_u16(&bytes[6]);
-    uint32_t sector = fft_util_parse_u32(&bytes[8]);
-    uint16_t gg = fft_util_parse_u16(&bytes[10]);
-    uint32_t length = fft_util_parse_u32(&bytes[12]);
-    uint16_t ii = fft_util_parse_u16(&bytes[16]);
-    uint16_t jj = fft_util_parse_u16(&bytes[18]);
+    // Split time and weather from single byte.
+    fft_time_e time = (fft_time_e)((time_and_weather >> 7) & 0x1);
+    fft_weather_e weather = (fft_weather_e)((time_and_weather >> 4) & 0x7);
 
     fft_record_t record = {
         .type = type,
