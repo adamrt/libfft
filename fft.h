@@ -747,6 +747,27 @@ fft_color888_t fft_color888_read(fft_span_t* span);
 bool fft_color5551_is_transparent(fft_color5551_t color);
 
 /*
+================================================================================
+Palettes
+================================================================================
+*/
+
+enum {
+    FFT_PALETTE_COLOR_COUNT = 16,      // Number of colors in a palette
+    FFT_PALETTESET_PALETTE_COUNT = 16, // Number of palettes in a palette set
+};
+
+typedef struct {
+    fft_color5551_t colors[FFT_PALETTE_COLOR_COUNT];
+} fft_palette_t;
+
+typedef struct {
+    fft_palette_t palettes[FFT_PALETTESET_PALETTE_COUNT];
+} fft_paletteset_t;
+
+fft_palette_t fft_palette_read(fft_span_t* span);
+fft_paletteset_t fft_paletteset_read(fft_span_t* span);
+
 /*
 ================================================================================
 Images
@@ -1531,6 +1552,28 @@ bool fft_color5551_is_transparent(fft_color5551_t color) {
 }
 
 /*
+================================================================================
+Palettes Implementation
+================================================================================
+*/
+
+fft_palette_t fft_palette_read(fft_span_t* span) {
+    fft_palette_t palette = { 0 };
+    for (uint32_t i = 0; i < FFT_PALETTE_COLOR_COUNT; i++) {
+        palette.colors[i] = fft_color5551_read(span);
+    }
+
+    return palette;
+}
+
+fft_paletteset_t fft_paletteset_read(fft_span_t* span) {
+    fft_paletteset_t palette_set = { 0 };
+    for (uint32_t i = 0; i < FFT_PALETTESET_PALETTE_COUNT; i++) {
+        palette_set.palettes[i] = fft_palette_read(span);
+    }
+    return palette_set;
+}
+
 /*
 ================================================================================
 Images Implementation
