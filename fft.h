@@ -924,6 +924,15 @@ typedef struct {
 
 typedef struct {
     polygon_t polygons[FFT_MESH_MAX_POLYGONS];
+    uint16_t polygon_count; // Number of textured triangles
+
+    struct {
+        uint16_t tex_tri_count;    // Number of textured triangles
+        uint16_t tex_quad_count;   // Number of textured quads
+        uint16_t untex_tri_count;  // Number of untextured triangles
+        uint16_t untex_quad_count; // Number of untextured quads
+    } stats;
+
     bool valid;
 } fft_geometry_t;
 
@@ -1666,6 +1675,12 @@ static fft_geometry_t fft_geometry_read(fft_span_t* span) {
     uint16_t P = fft_span_read_u16(span); // Textured quads
     uint16_t Q = fft_span_read_u16(span); // Untextured triangles
     uint16_t R = fft_span_read_u16(span); // Untextured quads
+
+    // Retain the counts because we store the data as a single polygon type.
+    geometry.stats.tex_tri_count = N;
+    geometry.stats.tex_quad_count = P;
+    geometry.stats.untex_tri_count = Q;
+    geometry.stats.untex_quad_count = R;
 
     // Validate maximum values
     FFT_ASSERT(N < FFT_MESH_MAX_TEX_TRIS, "Mesh textured triangle count exceeded");
