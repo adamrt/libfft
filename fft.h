@@ -1016,6 +1016,17 @@ Span Implementation
 ================================================================================
 */
 
+enum {
+    // This is the size of a map texture, which is the largest file size we read.
+    FFT_SPAN_MAX_BYTES = 131072,
+};
+
+static void fft_span_read_bytes(fft_span_t* f, size_t size, uint8_t* out_bytes) {
+    FFT_ASSERT(size <= FFT_SPAN_MAX_BYTES, "Too many bytes requested.");
+    memcpy(out_bytes, &f->data[f->offset], size);
+    f->offset += size;
+    return;
+}
 // FN_SPAN_READ is a macro that generates a read function for a specific type. It
 // reads the value, returns it and increments the offset.
 #define FFT_FN_SPAN_READ(name, type)                                                  \
@@ -1304,15 +1315,22 @@ static fft_record_t fft_record_read(fft_span_t* span) {
         .ii = ii,
         .jj = jj,
     };
+
+    // Rollback to the start of the record for raw data.
+    span->offset -= FFT_RECORD_SIZE;
+    fft_span_read_bytes(span, FFT_RECORD_SIZE, record.raw);
+
     return record;
 }
 
 static uint32_t fft_record_read_all(fft_span_t* span, fft_record_t* out_records) {
     uint32_t count = 0;
-    while (span->offset + 20 < span->size) {
+    while (span->offset + FFT_RECORD_SIZE < span->size) {
         fft_record_t record = fft_record_read(span);
         if (record.type == FFT_RECORDTYPE_END) {
-            // End of records, stop reading.
+            break;
+        }
+        if (count >= FFT_RECORD_MAX) {
             break;
         }
         out_records[count++] = record;
