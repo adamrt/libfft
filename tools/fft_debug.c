@@ -157,7 +157,8 @@ void read_geometry(void) {
             fft_span_t file = fft_io_read(primary.sector, primary.length);
             fft_mesh_t mesh = fft_mesh_read(&file);
 
-            mesh.geometry.valid = true;
+            mesh.meta.has_geometry = true; // Fake so we don't get optimized away.
+
             fft_io_close(file);
         }
     }

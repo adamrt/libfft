@@ -1118,6 +1118,131 @@ fft_lighting_t fft_lighting_read(fft_span_t* span);
 
 /*
 ================================================================================
+Terrain
+================================================================================
+
+
+================================================================================
+*/
+
+enum {
+    FFT_TERRAIN_MAX_X = 17,
+    FFT_TERRAIN_MAX_Z = 18,
+    FFT_TERRAIN_MAX_Y = 2, // Elevation
+
+    FFT_TERRAIN_MAX_TILES = 256,
+    FFT_TERRAIN_TILE_WIDTH = 28,
+    FFT_TERRAIN_TILE_DEPTH = 28,
+    FFT_TERRAIN_TILE_HEIGHT = 12,
+
+    FFT_TERRAIN_STR_SIZE = 128
+};
+
+#define FFT_TERRAIN_SURFACE_INDEX                       \
+    X(SURFACE_NATURAL_SURFACE, 0x00, "Natural Surface") \
+    X(SURFACE_SAND, 0x01, "Sand")                       \
+    X(SURFACE_STALACTITE, 0x02, "Stalactite")           \
+    X(SURFACE_GRASSLAND, 0x03, "Grassland")             \
+    X(SURFACE_THICKET, 0x04, "Thicket")                 \
+    X(SURFACE_SNOW, 0x05, "Snow")                       \
+    X(SURFACE_ROCKY_CLIFF, 0x06, "Rocky Cliff")         \
+    X(SURFACE_GRAVEL, 0x07, "Gravel")                   \
+    X(SURFACE_WASTELAND, 0x08, "Wasteland")             \
+    X(SURFACE_SWAMP, 0x09, "Swamp")                     \
+    X(SURFACE_MARSH, 0x0A, "Marsh")                     \
+    X(SURFACE_POISONED_MARSH, 0x0B, "Poisoned Marsh")   \
+    X(SURFACE_LAVA_ROCKS, 0x0C, "Lava Rocks")           \
+    X(SURFACE_ICE, 0x0D, "Ice")                         \
+    X(SURFACE_WATERWAY, 0x0E, "Waterway")               \
+    X(SURFACE_RIVER, 0x0F, "River")                     \
+    X(SURFACE_LAKE, 0x10, "Lake")                       \
+    X(SURFACE_SEA, 0x11, "Sea")                         \
+    X(SURFACE_LAVA, 0x12, "Lava")                       \
+    X(SURFACE_ROAD, 0x13, "Road")                       \
+    X(SURFACE_WOODEN_FLOOR, 0x14, "Wooden Floor")       \
+    X(SURFACE_STONE_FLOOR, 0x15, "Stone Floor")         \
+    X(SURFACE_ROOF, 0x16, "Roof")                       \
+    X(SURFACE_STONEWALL, 0x17, "Stonewall")             \
+    X(SURFACE_SKY, 0x18, "Sky")                         \
+    X(SURFACE_DARKNESS, 0x19, "Darkness")               \
+    X(SURFACE_SALT, 0x1A, "Salt")                       \
+    X(SURFACE_BOOK, 0x1B, "Book")                       \
+    X(SURFACE_OBSTACLE, 0x1C, "Obstacle")               \
+    X(SURFACE_RUG, 0x1D, "Rug")                         \
+    X(SURFACE_TREE, 0x1E, "Tree")                       \
+    X(SURFACE_BOX, 0x1F, "Box")                         \
+    X(SURFACE_BRICK, 0x20, "Brick")                     \
+    X(SURFACE_CHIMNEY, 0x21, "Chimney")                 \
+    X(SURFACE_MUD_WALL, 0x22, "Mud Wall")               \
+    X(SURFACE_BRIDGE, 0x23, "Bridge")                   \
+    X(SURFACE_WATER_PLANT, 0x24, "Water Plant")         \
+    X(SURFACE_STAIRS, 0x25, "Stairs")                   \
+    X(SURFACE_FURNITURE, 0x26, "Furniture")             \
+    X(SURFACE_IVY, 0x27, "Ivy")                         \
+    X(SURFACE_DECK, 0x28, "Deck")                       \
+    X(SURFACE_MACHINE, 0x29, "Machine")                 \
+    X(SURFACE_IRON_PLATE, 0x2A, "Iron Plate")           \
+    X(SURFACE_MOSS, 0x2B, "Moss")                       \
+    X(SURFACE_TOMBSTONE, 0x2C, "Tombstone")             \
+    X(SURFACE_WATERFALL, 0x2D, "Waterfall")             \
+    X(SURFACE_COFFIN, 0x2E, "Coffin")                   \
+    X(SURFACE_CROSS_SECTION, 0x3F, "Cross Section")
+
+#define FFT_TERRAIN_SLOPE_INDEX             \
+    X(SLOPE_FLAT, 0x00, "Flat")             \
+    X(SLOPE_INCLINE_N, 0x85, "Incline N")   \
+    X(SLOPE_INCLINE_E, 0x52, "Incline E")   \
+    X(SLOPE_INCLINE_S, 0x25, "Incline S")   \
+    X(SLOPE_INCLINE_W, 0x58, "Incline W")   \
+    X(SLOPE_CONVEX_NE, 0x41, "Convex NE")   \
+    X(SLOPE_CONVEX_SE, 0x11, "Convex SE")   \
+    X(SLOPE_CONVEX_SW, 0x14, "Convex SW")   \
+    X(SLOPE_CONVEX_NW, 0x44, "Convex NW")   \
+    X(SLOPE_CONCAVE_NE, 0x96, "Concave NE") \
+    X(SLOPE_CONCAVE_SE, 0x66, "Concave SE") \
+    X(SLOPE_CONCAVE_SW, 0x69, "Concave SW") \
+    X(SLOPE_CONCAVE_NW, 0x99, "Concave NW")
+
+typedef enum {
+#define X(oname, ovalue, ostring) oname = ovalue,
+    FFT_TERRAIN_SURFACE_INDEX
+#undef X
+} fft_terrain_surface_e;
+
+typedef enum {
+#define X(oname, ovalue, ostring) oname = ovalue,
+    FFT_TERRAIN_SLOPE_INDEX
+#undef X
+} fft_terrain_slope_e;
+
+typedef struct {
+    fft_terrain_surface_e surface;
+    fft_terrain_slope_e slope;
+    uint8_t sloped_height_bottom;
+    uint8_t sloped_height_top; // difference between bottom and top
+    uint8_t depth;
+    uint8_t shading;
+    uint8_t auto_cam_dir;   // auto rotate camera if unit enters this tile
+    bool pass_through_only; // Can walk/cursor but cannot stop on it
+    bool cant_walk;
+    bool cant_select;
+} fft_terrain_tile_t;
+
+typedef struct {
+    fft_terrain_tile_t tiles[FFT_TERRAIN_MAX_Y][FFT_TERRAIN_MAX_TILES];
+    uint8_t x_count;
+    uint8_t z_count;
+    bool valid;
+} fft_terrain_t;
+
+static fft_terrain_t fft_terrain_read(fft_span_t* span);
+static const char* fft_terrain_surface_str(fft_terrain_surface_e value);
+static const char* fft_terrain_slope_str(fft_terrain_slope_e value);
+static const char* fft_terrain_shading_str(uint8_t value);
+static void fft_terrain_camdir_str(uint8_t cam_dir, char out_str[static FFT_TERRAIN_STR_SIZE]);
+
+/*
+================================================================================
 Mesh
 ================================================================================
 
@@ -1156,6 +1281,7 @@ typedef struct {
     fft_geometry_t geometry;
     fft_paletteset_t palettes_color;
     fft_lighting_t lighting;
+    fft_terrain_t terrain;
 
     struct {
         // Geometry
@@ -1168,10 +1294,11 @@ typedef struct {
         bool has_geometry;
         bool has_texture_paletteset;
         bool has_lighting;
+        bool has_terrain;
 
         // Lighting
         uint8_t light_count;
-    } info;
+    } meta;
 } fft_mesh_t;
 
 fft_mesh_t fft_mesh_read(fft_span_t* span);
@@ -2097,6 +2224,137 @@ fft_lighting_t fft_lighting_read(fft_span_t* span) {
 
 /*
 ================================================================================
+Terrain Implementation
+================================================================================
+*/
+
+static fft_terrain_t fft_terrain_read(fft_span_t* span) {
+    fft_terrain_t terrain = { 0 };
+
+    uint8_t x_count = fft_span_read_u8(span);
+    uint8_t z_count = fft_span_read_u8(span);
+    FFT_ASSERT(x_count <= FFT_TERRAIN_MAX_X, "Terrain X count exceeded");
+    FFT_ASSERT(z_count <= FFT_TERRAIN_MAX_Z, "Terrain Z count exceeded");
+
+    for (uint8_t level = 0; level < 2; level++) {
+        for (uint8_t z = 0; z < z_count; z++) {
+            for (uint8_t x = 0; x < x_count; x++) {
+                // FIXME: This code needs to be validated that it is reading everything correctly.
+                fft_terrain_tile_t tile = { 0 };
+
+                uint8_t raw_surface = fft_span_read_u8(span);
+                tile.surface = (fft_terrain_surface_e)(raw_surface & 0x3F); // 0b00111111
+                fft_span_read_u8(span);
+                tile.sloped_height_bottom = fft_span_read_u8(span);
+                uint8_t slope_top_and_depth = fft_span_read_u8(span);
+                tile.depth = (slope_top_and_depth >> 5) & 0x07;      // 0b11100000 -> 0b00000111
+                tile.sloped_height_top = slope_top_and_depth & 0x1F; // 0b00011111
+                tile.slope = (fft_terrain_slope_e)fft_span_read_u8(span);
+                fft_span_read_u8(span); // Padding
+
+                if (tile.slope == SLOPE_FLAT) {
+                    // Sloped height top should be 0 for flat tiles but some
+                    // maps tiles set to 1. This should be researched further.
+                    FFT_ASSERT(tile.sloped_height_top == 0 || tile.sloped_height_top == 1, "Flat tile has > 1 sloped height top");
+                }
+
+                // bits 3, 4, 5, are unused
+                uint8_t misc = fft_span_read_u8(span);
+                tile.pass_through_only = misc & (1 << 0); // bit 0
+                tile.shading = (misc >> 2) & 0x3;         // bit 1 & 2
+                tile.cant_walk = misc & (1 << 6);         // bit 6
+                tile.cant_select = misc & (1 << 7);       // bit 7
+                tile.auto_cam_dir = fft_span_read_u8(span);
+
+                terrain.tiles[level][z * x_count + x] = tile;
+            }
+        }
+    }
+
+    terrain.x_count = x_count;
+    terrain.z_count = z_count;
+    terrain.valid = true;
+    return terrain;
+}
+
+static const char* fft_terrain_surface_str(fft_terrain_surface_e value) {
+    switch (value) {
+#define X(oname, ovalue, ostring) \
+case oname:                       \
+    return ostring;
+        FFT_TERRAIN_SURFACE_INDEX
+#undef X
+    default:;
+        static char buf[32];
+        snprintf(buf, sizeof(buf), "Unknown 0x%02X", value);
+        return buf;
+    }
+}
+
+static const char* fft_terrain_slope_str(fft_terrain_slope_e value) {
+    switch (value) {
+#define X(oname, ovalue, ostring) \
+case oname:                       \
+    return ostring;
+        FFT_TERRAIN_SLOPE_INDEX
+#undef X
+    default:;
+        static char buf[32];
+        snprintf(buf, sizeof(buf), "Unknown 0x%02X", value);
+        return buf;
+    }
+}
+
+static const char* fft_terrain_shading_str(uint8_t value) {
+    switch (value) {
+    case 0:
+        return "Normal";
+    case 1:
+        return "Dark";
+    case 2:
+        return "Darker";
+    case 3:
+        return "Darkest";
+    default:
+        return "Unknown";
+    }
+}
+
+static void fft_terrain_camdir_str(uint8_t cam_dir, char out_str[static FFT_TERRAIN_STR_SIZE]) {
+    out_str[0] = '\0';
+
+    static const char* labels[8] = {
+        "NWT", "SWT",
+        "SET", "NET",
+        "NWB", "SWB",
+        "SEB", "NEB"
+    };
+
+    uint32_t offset = 0;
+    uint32_t written = 0;
+    bool first = true;
+
+    for (uint32_t i = 0; i < 8; i++) {
+        if (cam_dir & (1u << i)) {
+            if (!first) {
+                written = (uint32_t)snprintf(out_str + offset, FFT_TERRAIN_STR_SIZE - offset, ", ");
+                offset += (written > 0) ? written : 0;
+            }
+
+            written = (uint32_t)snprintf(out_str + offset, FFT_TERRAIN_STR_SIZE - offset, "%s", labels[i]);
+            offset += (written > 0) ? written : 0;
+
+            first = false;
+        }
+    }
+
+    if (offset == 0) {
+        snprintf(out_str, FFT_TERRAIN_STR_SIZE, "(None)");
+    }
+}
+
+/*
+================================================================================
 Mesh Implementation
 ================================================================================
 */
@@ -2114,30 +2372,36 @@ fft_mesh_t fft_mesh_read(fft_span_t* span) {
 
         // Jump back so we can read the polygon counts.
         fft_span_set_offset(span, mesh.header.geometry);
-        mesh.info.tex_tri_count = fft_span_read_u16(span);
-        mesh.info.tex_quad_count = fft_span_read_u16(span);
-        mesh.info.untex_tri_count = fft_span_read_u16(span);
-        mesh.info.untex_quad_count = fft_span_read_u16(span);
-        mesh.info.polygon_count = mesh.info.tex_tri_count + mesh.info.tex_quad_count + mesh.info.untex_tri_count + mesh.info.untex_quad_count;
-        mesh.info.has_geometry = true;
+        mesh.meta.tex_tri_count = fft_span_read_u16(span);
+        mesh.meta.tex_quad_count = fft_span_read_u16(span);
+        mesh.meta.untex_tri_count = fft_span_read_u16(span);
+        mesh.meta.untex_quad_count = fft_span_read_u16(span);
+        mesh.meta.polygon_count = mesh.meta.tex_tri_count + mesh.meta.tex_quad_count + mesh.meta.untex_tri_count + mesh.meta.untex_quad_count;
+        mesh.meta.has_geometry = true;
     }
 
     if (mesh.header.texture_paletteset != 0) {
         fft_span_set_offset(span, mesh.header.texture_paletteset);
         mesh.palettes_color = fft_paletteset_read(span);
-        mesh.info.has_texture_paletteset = true;
+        mesh.meta.has_texture_paletteset = true;
     }
 
     if (mesh.header.lights_and_background != 0) {
         fft_span_set_offset(span, mesh.header.lights_and_background);
         mesh.lighting = fft_lighting_read(span);
-        mesh.info.has_lighting = true;
+        mesh.meta.has_lighting = true;
 
         for (uint32_t i = 0; i < FFT_LIGHTING_MAX_LIGHTS; i++) {
             if (fft_light_is_valid(mesh.lighting.lights[i])) {
-                mesh.info.light_count++;
+                mesh.meta.light_count++;
             }
         }
+    }
+
+    if (mesh.header.terrain != 0) {
+        fft_span_set_offset(span, mesh.header.terrain);
+        mesh.terrain = fft_terrain_read(span);
+        mesh.meta.has_terrain = true;
     }
 
     return mesh;
