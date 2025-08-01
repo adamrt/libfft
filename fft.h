@@ -79,24 +79,24 @@ About libFFT Data Structures
 ================================================================================
 
 The data structures are intentionally simple and try not to make assumptions
-about the users intentions. For instance, we keep the original types were
-possible, like using i16 for vertex position data instead of casting to the
-more common f32. We use custom types for fixed-point math to inform the user
-of the intended use in the game. We store that data in its original format
-but provide helper functions and macros to convert to commonly desired types.
+about the users intentions. For instance, we keep the original types where
+possible, like using i16 for vertex position data instead of casting to the more
+common f32. We use custom types for fixed-point math to inform the user of the
+intended use in the game. We store that data in its original format but provide
+helper functions and macros to convert to commonly desired types.
 
 One exception where we don't stick to the original types is when there are
 multiple values in a single byte. We typically split these into separate fields
 for ease of use. For example:
 
     Polygon Tile Locations:
-    +--------------+------+---------+
-    | Width (bits) | Type | Purpose |
-    |--------------+------+---------+
-    | 7            | uint | Z coord |
-    | 1            | N/A  | Height  |
-    | 8            | uint | X coord |
-    +--------------+------+---------+
+    +------+------+---------+
+    | Bits | Type | Purpose |
+    |------+------+---------+
+    | 7    | uint | Z coord |
+    | 1    | N/A  | Height  |
+    | 8    | uint | X coord |
+    +------+------+---------+
 
 Our data structure would be something that split the values from the first
 byte into two separate fields:
@@ -109,7 +109,7 @@ byte into two separate fields:
     } polygon_tile_location_t;
     ```
 
-  This makes accessing fields a little easier, more readable at the minor
+  This makes accessing fields a little easier. Making it more readable at the
   expense of a little space.
 
 ================================================================================
@@ -141,8 +141,9 @@ typedef int16_t fft_fixed16_t;
 Span
 ================================================================================
 
-Span is a structure that represents a contiguous block of data in memory. A span
-is used to represent a file or part of a file in the FFT BIN filesystem.
+Span is a structure and set of functions that represents a contiguous block of
+data in memory. A span is used to represent a file or part of a file in the FFT
+BIN filesystem.
 
 The related functions allow simple reading of specific datatypes.
 
@@ -173,12 +174,12 @@ purpose filesystem access.
 */
 
 // FFT_IO_INDEX is a list of most files in the filesystem from the original PSX
-// bin file. They are stored in this macro so we can generate the enum and the
-// list without having to duplicate and manage all the entires in two places.
+// BIN file. They are stored in this macro so we can generate the enum and the
+// lists without having to duplicate and manage all the entires in two places.
 //
 // NOTE: Some files are not included in this list to keep it more manageable:
-//   - Non-GNS Map files: Sector and len can be determined from the GNS files.
-//   - EFFECT/*: We don't use EFFECTS and the list is huge.
+//   - Non-GNS Map files: Sector and size can be determined from the GNS files.
+//   - EFFECT/*: We don't use EFFECTS yet and the list is huge.
 //   - SOUND/*: We don't use sound yet
 //
 #define FFT_IO_INDEX                                               \
@@ -578,16 +579,16 @@ purpose filesystem access.
     X(F_WORLD__WLDTEX_TM2, 73000, 274432, "WORLD/WLDTEX.TM2")      \
     X(F_WORLD__WORLD_BIN, 84261, 973144, "WORLD/WORLD.BIN")
 
-// This is an enum of all files in the filesystem. This is useful for
-// referencing files in the filesystem and allowing indexing into file_list
+// This is an enum of (almost) all files in the filesystem. This is useful for
+// referencing files in the filesystem and allowing indexing into file_list.
 //
-// Result:
-//   typedef enum {
+// typedef enum {
 //     F_BATTLE_BIN,
 //     F_EVENT__TEST_EVT,
 //     F_MAP__MAP000_GNS,
 //     ...
-//   }
+// } fft_io_entry_e;
+//
 typedef enum {
 #define X(name, sector, size, path) name,
     FFT_IO_INDEX
@@ -600,10 +601,10 @@ typedef enum {
 Map state
 ================================================================================
 
-The map state represents the state of a map. A map typically has multiple meshes
-and textures for use in different events and random battles. The state is used
-to determine which resources to load based on the time of day, weather, and
-layout. Each resource has a specified state.
+The map state represents the specific state of a map. A map typically has
+multiple meshes and textures for use in different events and random battles. The
+state is used to determine which resources to load based on the time of day,
+weather and layout. Each resource has a specified state.
 
 The default state is:
   - Time: FFT_TIME_DAY
@@ -646,10 +647,10 @@ Map/GNS records
 ================================================================================
 
 Each map has a single GNS file. These files contains a varying number of 20-byte
-records (max 40). These records describe the for the map. They have a type
-(fft_recordtype_e), which specifies if its a texture, mesh data, etc. They also
-have the weather/time/layout they are valid for. Then the location (sector) and
-size in the BIN file for that data.
+records (max 40 records). These records describe the state of the map. They have
+a type (fft_recordtype_e), which specifies if its a texture, mesh data, etc.
+They also have the weather/time/layout they are valid for. Then the location
+(sector) and size in the BIN file for that data.
 
 Each resource is a separate file in the original PSX binary if you mount the
 disk. But, we just get the sector and length, and read them directly from the
@@ -705,6 +706,8 @@ typedef struct {
     uint16_t gg;
     uint16_t ii;
     uint16_t jj;
+
+    uint8_t raw[FFT_RECORD_SIZE]; // Raw data for debugging
 } fft_record_t;
 
 /*
@@ -775,6 +778,77 @@ static fft_image_desc_t image_get_desc(fft_io_entry_e entry);
 /*
 ================================================================================
 Geometry
+================================================================================
+
+Geometry is the map's polygons, vertices, tiles and uv/palette data. It is the
+first chuck of a mesh file after the header.
+
+This is required for the default state, but is optional for all other states.
+
+The polygons are stored on-disk in the following order:
+  - Textured triangles
+  - Textured quadrilaterals
+  - Untextured triangles
+  - Untextured quadrilaterals
+
+We parse them into a single array of polygons. We differentiate between them
+with fft_polytype_e (FFT_POLYTYPE_TRIANGLE and FFT_POLYTYPE_QUAD).
+
+The untextured polygons should be shown as black and are often the map sides.
+
+The Geometry section of the mesh has 6 parts
+
+* Header
+
+The header contains 4x u16 with the number of each type of polyon.
+
++------------------+-----+
+| Type             | MAX |
++------------------+-----+
+| Textured tris    | 512 |
+| Textured quads   | 768 |
+| Untextured tris  | 64  |
+| Untextured quads | 256 |
++------------------+-----+
+
+
+* Position
+
+  The position data is stored as int16_t for X, Y and Z. The coordinates system
+  is like so:
+
+    - X+ = right
+    - Y+ = down // This is non-standard for modern 3D engines, but is how FFT works.
+    - Z+ = forward
+
+* Normals
+
+  The normal data is stored as fft_fixed16_t. The float version of this can be
+  derived by casting and dividing it by 4096.0f. The original data is in a
+  1.3.12 fixed format where 4096 == 1.0.The normals are used for lighting
+  calculations.
+
+* Textured Info
+
+  This information contains the texture coordinates, palette, page, and some
+  unknown fields. The page is a relic of the PS1 hardware. Texture sizes were
+  limited to 256x256 pixels, so textures were split into pages of 256x256
+  pixels. So a texture is 256x1024. This is basically 4 pages sitting on top of
+  each other. To calculate the actual coordinates you can use the formula:
+
+    - texcoord.u = (texcoord.u + (256 * page));
+
+* UnTextured Info
+
+  This information is for untextured polygons. It contains 4 bytes per polygon.
+  We don't know the purpose of this data.
+
+* Tile Info
+
+  The tile info contains x/z coordinate indexes into the terrain map. The
+  elevation is either 0 or 1, depending on when there is two levels of terrain
+  (think of bridges that you can walk over and under).
+
 ================================================================================
 */
 
@@ -1465,6 +1539,8 @@ static void _read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_e t
 static void _read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t* poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
         polygon_t* poly = &g->polygons[*poly_offset + i];
+
+        // Read normals
         for (uint32_t j = 0; j < (type == FFT_POLYTYPE_TRIANGLE ? 3 : 4); j++) {
             poly->vertices[j].normal = fft_geometry_read_normal(span);
         }
