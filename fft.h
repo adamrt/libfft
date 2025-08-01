@@ -1657,6 +1657,7 @@ static fft_geometry_t fft_geometry_read(fft_span_t* span) {
     uint32_t offset = fft_span_read_u32(span);
     span->offset = offset;
     if (span->offset == 0) {
+        // Map 52's primary mesh is empty, so we can skip reading it.
         return geometry;
     }
 
