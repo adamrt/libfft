@@ -927,7 +927,7 @@ typedef struct {
     bool valid;
 } fft_geometry_t;
 
-static fft_geometry_t read_geometry(fft_span_t* span);
+static fft_geometry_t fft_geometry_read(fft_span_t* span);
 
 #ifdef __cplusplus
 }
@@ -1569,41 +1569,40 @@ static void _read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_e ty
 
 static void _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t* poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
-        uint8_t au = fft_span_read_u8(span);             // 0
-        uint8_t av = fft_span_read_u8(span);             // 1
-        uint8_t palette = fft_span_read_u8(span);        // 2
-        uint8_t unknown_a = fft_span_read_u8(span);      // 3
-        uint8_t bu = fft_span_read_u8(span);             // 4
-        uint8_t bv = fft_span_read_u8(span);             // 5
-        uint8_t image_and_page = fft_span_read_u8(span); // 6
-        // unknown_b comes from image_and_page
-        uint8_t unknown_c = fft_span_read_u8(span); // 7
-        uint8_t cu = fft_span_read_u8(span);        // 8
-        uint8_t cv = fft_span_read_u8(span);        // 9
+        // Read all data
+        uint8_t au = fft_span_read_u8(span);                           // 0
+        uint8_t av = fft_span_read_u8(span);                           // 1
+        uint8_t palette = fft_span_read_u8(span);                      // 2
+        uint8_t unknown_a = fft_span_read_u8(span);                    // 3
+        uint8_t bu = fft_span_read_u8(span);                           // 4
+        uint8_t bv = fft_span_read_u8(span);                           // 5
+        uint8_t page_and_image_and_unknown_b = fft_span_read_u8(span); // 6
+        uint8_t unknown_c = fft_span_read_u8(span);                    // 7
+        uint8_t cu = fft_span_read_u8(span);                           // 8
+        uint8_t cv = fft_span_read_u8(span);                           // 9
 
-        // Split image_and_page into its components.
-        uint8_t page = image_and_page & 0x03;                // bits 0–1  (0b00000011)
-        uint8_t image_to_use = (image_and_page >> 2) & 0x03; // bits 2–3  (0b00001100)
-        uint8_t unknown_b = (image_and_page >> 4) & 0x0F;    // bits 4–7  (0b11110000)
+        // Split single byte values
+        uint8_t page = (page_and_image_and_unknown_b >> 0) & 0x03;      // bits 0–1  (0b00000011)
+        uint8_t image = (page_and_image_and_unknown_b >> 2) & 0x03;     // bits 2–3  (0b00001100)
+        uint8_t unknown_b = (page_and_image_and_unknown_b >> 4) & 0x0F; // bits 4–7  (0b11110000)
 
-        g->polygons[*poly_offset + i].tex.palette = palette;
-        g->polygons[*poly_offset + i].tex.page = page;
-        g->polygons[*poly_offset + i].tex.image_to_use = image_to_use;
-        g->polygons[*poly_offset + i].tex.unknown_a = unknown_a;
-        g->polygons[*poly_offset + i].tex.unknown_b = unknown_b;
-        g->polygons[*poly_offset + i].tex.unknown_c = unknown_c;
-        g->polygons[*poly_offset + i].tex.texcoords[0].u = au;
-        g->polygons[*poly_offset + i].tex.texcoords[0].v = av;
-        g->polygons[*poly_offset + i].tex.texcoords[1].u = bu;
-        g->polygons[*poly_offset + i].tex.texcoords[1].v = bv;
-        g->polygons[*poly_offset + i].tex.texcoords[2].u = cu;
-        g->polygons[*poly_offset + i].tex.texcoords[2].v = cv;
+        // Populate the polygon's texture info.
+        polygon_t* poly = &g->polygons[*poly_offset + i];
+        poly->tex.texcoords[0] = (fft_texcoord_t) { .u = au, .v = av };
+        poly->tex.texcoords[1] = (fft_texcoord_t) { .u = bu, .v = bv };
+        poly->tex.texcoords[2] = (fft_texcoord_t) { .u = cu, .v = cv };
+        poly->tex.palette = palette;
+        poly->tex.page = page;
+        poly->tex.image_to_use = image;
+        poly->tex.unknown_a = unknown_a;
+        poly->tex.unknown_b = unknown_b;
+        poly->tex.unknown_c = unknown_c;
 
         if (type == FFT_POLYTYPE_QUAD) {
             uint8_t du = fft_span_read_u8(span);
             uint8_t dv = fft_span_read_u8(span);
-            g->polygons[*poly_offset + i].tex.texcoords[3].u = du;
-            g->polygons[*poly_offset + i].tex.texcoords[3].v = dv;
+            fft_texcoord_t d = { .u = du, .v = dv };
+            poly->tex.texcoords[3] = d;
         }
     }
 
@@ -1612,15 +1611,18 @@ static void _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e ty
 
 static void _read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t* poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
+        // Read all data
         uint8_t unknown_a = fft_span_read_u8(span); // 0
         uint8_t unknown_b = fft_span_read_u8(span); // 1
         uint8_t unknown_c = fft_span_read_u8(span); // 2
         uint8_t unknown_d = fft_span_read_u8(span); // 3
 
-        g->polygons[*poly_offset + i].untex.unknown_a = unknown_a;
-        g->polygons[*poly_offset + i].untex.unknown_b = unknown_b;
-        g->polygons[*poly_offset + i].untex.unknown_c = unknown_c;
-        g->polygons[*poly_offset + i].untex.unknown_d = unknown_d;
+        // Populate the polygon's untextured info.
+        polygon_t* poly = &g->polygons[*poly_offset + i];
+        poly->untex.unknown_a = unknown_a;
+        poly->untex.unknown_b = unknown_b;
+        poly->untex.unknown_c = unknown_c;
+        poly->untex.unknown_d = unknown_d;
     }
 
     *poly_offset += count;
@@ -1628,18 +1630,25 @@ static void _read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t* poly_
 
 static void _read_tile_locations(fft_span_t* span, fft_geometry_t* g, uint32_t* poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
-        uint8_t zy = fft_span_read_u8(span);
-        uint8_t z = (zy >> 1) & 0xFE; // 0b11111110
-        uint8_t y = (zy >> 0) & 0x01; // 0b00000001
+        // Read all data
+        uint8_t z_and_y = fft_span_read_u8(span); // y is elevation 0 or 1
         uint8_t x = fft_span_read_u8(span);
-        g->polygons[*poly_offset + i].tiles.x = x;
-        g->polygons[*poly_offset + i].tiles.z = z;
-        g->polygons[*poly_offset + i].tiles.elevation = y;
+
+        // Split single byte values
+        uint8_t y = (z_and_y >> 0) & 0x01; // 0b00000001
+        uint8_t z = (z_and_y >> 1) & 0xFE; // 0b11111110
+
+        // Populate the polygon's tile info.
+        polygon_t* poly = &g->polygons[*poly_offset + i];
+        poly->tiles.x = x;
+        poly->tiles.z = z;
+        poly->tiles.elevation = y;
     }
+
     *poly_offset += count;
 }
 
-static fft_geometry_t read_geometry(fft_span_t* span) {
+static fft_geometry_t fft_geometry_read(fft_span_t* span) {
     fft_geometry_t geometry = { 0 };
 
     // 0x40 is always the location of the primary mesh pointer.
