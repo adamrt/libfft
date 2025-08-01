@@ -1124,6 +1124,12 @@ static void fft_span_read_bytes(fft_span_t* f, size_t size, uint8_t* out_bytes) 
     f->offset += size;
     return;
 }
+
+static void fft_span_set_offset(fft_span_t* f, size_t offset) {
+    FFT_ASSERT(offset <= f->size, "Seek out of bounds.");
+    f->offset = offset;
+}
+
 // FN_SPAN_READ is a macro that generates a read function for a specific type. It
 // reads the value, returns it and increments the offset.
 #define FFT_FN_SPAN_READ(name, type)                                                  \
@@ -1544,7 +1550,7 @@ static fft_image_t fft_image_read_4bpp_palettized(fft_span_t* span, fft_image_de
     fft_image_t image = fft_image_read_4bpp(span, desc.width, desc.height);
 
     // Read the palette (CLUT) data.
-    span->offset = desc.pal_offset;
+    fft_span_set_offset(span, desc.pal_offset);
     fft_image_t palette = fft_image_read_16bpp(span, FFT_IMAGE_PAL_COL_COUNT, desc.pal_count);
 
     fft_image_palettize(&image, &palette, pal_index);
