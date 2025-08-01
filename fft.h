@@ -777,6 +777,94 @@ static fft_image_desc_t image_get_desc(fft_io_entry_e entry);
 
 /*
 ================================================================================
+Mesh Header
+================================================================================
+
+There is a header at the beginning of each mesh file that is 196 bytes long. It
+contains intra-file u32 pointers to various chunks of data in the mesh file. If
+the value is 0, it means that the chunk is not present in the file.
+
+================================================================================
+*/
+
+enum {
+    FFT_MESH_PTR_GEOMETRY = 0x40,
+    FFT_MESH_PTR_PALETTES_COLOR = 0x44,
+    FFT_MESH_PTR_UNKNOWN_A = 0x4c, // this pointer is only non - zero in MAP000.5
+    FFT_MESH_PTR_LIGHT_AND_BACKGROUND = 0x64,
+    FFT_MESH_PTR_TERRAIN = 0x68,
+    FFT_MESH_PTR_TEXTURE_ANIM_INST = 0x6c,
+    FFT_MESH_PTR_PALETTE_ANIM_INST = 0x70,
+    FFT_MESH_PTR_PALETTES_GRAYSCALE = 0x7c,
+    FFT_MESH_PTR_MESH_ANIM_INST = 0x8c,
+    FFT_MESH_PTR_ANIM_MESH_1 = 0x90,
+    FFT_MESH_PTR_ANIM_MESH_2 = 0x94,
+    FFT_MESH_PTR_ANIM_MESH_3 = 0x98,
+    FFT_MESH_PTR_ANIM_MESH_4 = 0x9c,
+    FFT_MESH_PTR_ANIM_MESH_5 = 0xa0,
+    FFT_MESH_PTR_ANIM_MESH_6 = 0xa4,
+    FFT_MESH_PTR_ANIM_MESH_7 = 0xa8,
+    FFT_MESH_PTR_ANIM_MESH_8 = 0xac,
+    FFT_MESH_PTR_POLY_RENDER_PROPS = 0xb0,
+};
+
+typedef struct {
+    uint32_t geometry;              // 0x40 /  64
+    uint32_t palettes_color;        // 0x44 /  68
+    uint32_t lights_and_background; // 0x60 /  96
+    uint32_t terrain;               // 0x64 / 100
+    uint32_t texture_anim_inst;     // 0x68 / 104
+    uint32_t palette_anim_inst;     // 0x6C / 108
+    uint32_t palettes_grayscale;    // 0x78 / 120
+    uint32_t mesh_anim_inst;        // 0x88 / 136
+    uint32_t anim_mesh_1;           // 0x8C / 140
+    uint32_t anim_mesh_2;           // 0x90 / 144
+    uint32_t anim_mesh_3;           // 0x94 / 148
+    uint32_t anim_mesh_4;           // 0x98 / 152
+    uint32_t anim_mesh_5;           // 0x9C / 156
+    uint32_t anim_mesh_6;           // 0xA0 / 160
+    uint32_t anim_mesh_7;           // 0xA4 / 164
+    uint32_t anim_mesh_8;           // 0xA8 / 168
+    uint32_t poly_render_props;     // 0xAC / 172
+
+    uint32_t unknown_0x00; // 0x00 /   0
+    uint32_t unknown_0x04; // 0x04 /   4
+    uint32_t unknown_0x08; // 0x08 /   8
+    uint32_t unknown_0x0C; // 0x0C /  12
+    uint32_t unknown_0x10; // 0x10 /  16
+    uint32_t unknown_0x14; // 0x14 /  20
+    uint32_t unknown_0x18; // 0x18 /  24
+    uint32_t unknown_0x1C; // 0x1C /  28
+    uint32_t unknown_0x20; // 0x20 /  32
+    uint32_t unknown_0x24; // 0x24 /  36
+    uint32_t unknown_0x28; // 0x28 /  40
+    uint32_t unknown_0x2C; // 0x2C /  44
+    uint32_t unknown_0x30; // 0x30 /  48
+    uint32_t unknown_0x34; // 0x34 /  52
+    uint32_t unknown_0x38; // 0x38 /  56
+    uint32_t unknown_0x3C; // 0x3C /  60
+    uint32_t unknown_0x48; // 0x48 /  72
+    uint32_t unknown_0x4C; // 0x4C /  76
+    uint32_t unknown_0x50; // 0x50 /  80
+    uint32_t unknown_0x54; // 0x54 /  84
+    uint32_t unknown_0x58; // 0x58 /  88
+    uint32_t unknown_0x5C; // 0x5C /  92
+    uint32_t unknown_0x70; // 0x70 / 112
+    uint32_t unknown_0x74; // 0x74 / 116
+    uint32_t unknown_0x7C; // 0x7C / 124
+    uint32_t unknown_0x80; // 0x80 / 128
+    uint32_t unknown_0x84; // 0x84 / 132
+    uint32_t unknown_0xB0; // 0xB0 / 176
+    uint32_t unknown_0xB4; // 0xB4 / 180
+    uint32_t unknown_0xB8; // 0xB8 / 184
+    uint32_t unknown_0xBC; // 0xBC / 188
+    uint32_t unknown_0xC0; // 0xC0 / 192
+} fft_mesh_header_t;
+
+fft_mesh_header_t fft_mesh_header_read(fft_span_t* span);
+
+/*
+================================================================================
 Geometry
 ================================================================================
 
@@ -1530,6 +1618,75 @@ static bool fft_image_write_ppm(const fft_image_t* image, const char* path) {
 
 /*
 ================================================================================
+Mesh Header Implementation
+================================================================================
+*/
+fft_mesh_header_t fft_mesh_header_read(fft_span_t* span) {
+    fft_mesh_header_t header = { 0 };
+
+    header.unknown_0x00 = fft_span_read_u32(span); // 0x00 / 0
+    header.unknown_0x04 = fft_span_read_u32(span); // 0x04 / 4
+    header.unknown_0x08 = fft_span_read_u32(span); // 0x08 / 8
+    header.unknown_0x0C = fft_span_read_u32(span); // 0x0C / 12
+    header.unknown_0x10 = fft_span_read_u32(span); // 0x10 / 16
+    header.unknown_0x14 = fft_span_read_u32(span); // 0x14 / 20
+    header.unknown_0x18 = fft_span_read_u32(span); // 0x18 / 24
+    header.unknown_0x1C = fft_span_read_u32(span); // 0x1C / 28
+    header.unknown_0x20 = fft_span_read_u32(span); // 0x20 / 32
+    header.unknown_0x24 = fft_span_read_u32(span); // 0x24 / 36
+    header.unknown_0x28 = fft_span_read_u32(span); // 0x28 / 40
+    header.unknown_0x2C = fft_span_read_u32(span); // 0x2C / 44
+    header.unknown_0x30 = fft_span_read_u32(span); // 0x30 / 48
+    header.unknown_0x34 = fft_span_read_u32(span); // 0x34 / 52
+    header.unknown_0x38 = fft_span_read_u32(span); // 0x38 / 56
+    header.unknown_0x3C = fft_span_read_u32(span); // 0x3C / 60
+
+    header.geometry = fft_span_read_u32(span);       // 0x40 / 64
+    header.palettes_color = fft_span_read_u32(span); // 0x44 / 68
+
+    header.unknown_0x48 = fft_span_read_u32(span); // 0x48 / 72
+    header.unknown_0x4C = fft_span_read_u32(span); // 0x4C / 76
+    header.unknown_0x50 = fft_span_read_u32(span); // 0x50 / 80
+    header.unknown_0x54 = fft_span_read_u32(span); // 0x54 / 84
+    header.unknown_0x58 = fft_span_read_u32(span); // 0x58 / 88
+    header.unknown_0x5C = fft_span_read_u32(span); // 0x5C / 92
+
+    header.lights_and_background = fft_span_read_u32(span); // 0x60 / 96
+    header.terrain = fft_span_read_u32(span);               // 0x64 / 100
+    header.texture_anim_inst = fft_span_read_u32(span);     // 0x68 / 104
+    header.palette_anim_inst = fft_span_read_u32(span);     // 0x6C / 108
+
+    header.unknown_0x70 = fft_span_read_u32(span); // 0x70 / 112
+    header.unknown_0x74 = fft_span_read_u32(span); // 0x74 / 116
+
+    header.palettes_grayscale = fft_span_read_u32(span); // 0x78 / 120
+
+    header.unknown_0x7C = fft_span_read_u32(span); // 0x7C / 124
+    header.unknown_0x80 = fft_span_read_u32(span); // 0x80 / 128
+    header.unknown_0x84 = fft_span_read_u32(span); // 0x84 / 132
+
+    header.mesh_anim_inst = fft_span_read_u32(span);    // 0x88 / 136
+    header.anim_mesh_1 = fft_span_read_u32(span);       // 0x8C / 140
+    header.anim_mesh_2 = fft_span_read_u32(span);       // 0x90 / 144
+    header.anim_mesh_3 = fft_span_read_u32(span);       // 0x94 / 148
+    header.anim_mesh_4 = fft_span_read_u32(span);       // 0x98 / 152
+    header.anim_mesh_5 = fft_span_read_u32(span);       // 0x9C / 156
+    header.anim_mesh_6 = fft_span_read_u32(span);       // 0xA0 / 160
+    header.anim_mesh_7 = fft_span_read_u32(span);       // 0xA4 / 164
+    header.anim_mesh_8 = fft_span_read_u32(span);       // 0xA8 / 168
+    header.poly_render_props = fft_span_read_u32(span); // 0xAC / 172
+
+    header.unknown_0xB0 = fft_span_read_u32(span); // 0xB0 / 176
+    header.unknown_0xB4 = fft_span_read_u32(span); // 0xB4 / 180
+    header.unknown_0xB8 = fft_span_read_u32(span); // 0xB8 / 184
+    header.unknown_0xBC = fft_span_read_u32(span); // 0xBC / 188
+    header.unknown_0xC0 = fft_span_read_u32(span); // 0xC0 / 192
+
+    return header;
+}
+
+/*
+================================================================================
 Geometry Implementation
 ================================================================================
 */
@@ -1663,8 +1820,8 @@ static fft_geometry_t fft_geometry_read(fft_span_t* span) {
     // 0x40 is always the location of the primary mesh pointer.
     // 0xC4 is always the primary mesh pointer.
     span->offset = 0x40;
-    uint32_t primary_mesh_offset = fft_span_read_u32(span);
-    span->offset = primary_mesh_offset;
+    uint32_t geometry_offset = fft_span_read_u32(span);
+    span->offset = geometry_offset;
     if (span->offset == 0) {
         // Map 52's primary mesh is empty, so we can skip reading it.
         return geometry;
