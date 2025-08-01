@@ -842,13 +842,14 @@ There is a header at the beginning of each mesh file that is 196 bytes long. It
 contains intra-file u32 pointers to various chunks of data in the mesh file. If
 the value is 0, it means that the chunk is not present in the file.
 
+The gaps in the 196 bytes are filled with 0x00 for every mesh file.
+
 ================================================================================
 */
 
 enum {
     FFT_MESH_PTR_GEOMETRY = 0x40,
     FFT_MESH_PTR_PALETTES_COLOR = 0x44,
-    FFT_MESH_PTR_UNKNOWN_A = 0x4c, // this pointer is only non - zero in MAP000.5
     FFT_MESH_PTR_LIGHT_AND_BACKGROUND = 0x64,
     FFT_MESH_PTR_TERRAIN = 0x68,
     FFT_MESH_PTR_TEXTURE_ANIM_INST = 0x6c,
@@ -867,56 +868,23 @@ enum {
 };
 
 typedef struct {
-    uint32_t geometry;              // 0x40 /  64
-    uint32_t texture_paletteset;    // 0x44 /  68
-    uint32_t lights_and_background; // 0x60 /  96
-    uint32_t terrain;               // 0x64 / 100
-    uint32_t texture_anim_inst;     // 0x68 / 104
-    uint32_t palette_anim_inst;     // 0x6C / 108
-    uint32_t palettes_grayscale;    // 0x78 / 120
-    uint32_t mesh_anim_inst;        // 0x88 / 136
-    uint32_t anim_mesh_1;           // 0x8C / 140
-    uint32_t anim_mesh_2;           // 0x90 / 144
-    uint32_t anim_mesh_3;           // 0x94 / 148
-    uint32_t anim_mesh_4;           // 0x98 / 152
-    uint32_t anim_mesh_5;           // 0x9C / 156
-    uint32_t anim_mesh_6;           // 0xA0 / 160
-    uint32_t anim_mesh_7;           // 0xA4 / 164
-    uint32_t anim_mesh_8;           // 0xA8 / 168
-    uint32_t poly_render_props;     // 0xAC / 172
-
-    uint32_t unknown_0x00; // 0x00 /   0
-    uint32_t unknown_0x04; // 0x04 /   4
-    uint32_t unknown_0x08; // 0x08 /   8
-    uint32_t unknown_0x0C; // 0x0C /  12
-    uint32_t unknown_0x10; // 0x10 /  16
-    uint32_t unknown_0x14; // 0x14 /  20
-    uint32_t unknown_0x18; // 0x18 /  24
-    uint32_t unknown_0x1C; // 0x1C /  28
-    uint32_t unknown_0x20; // 0x20 /  32
-    uint32_t unknown_0x24; // 0x24 /  36
-    uint32_t unknown_0x28; // 0x28 /  40
-    uint32_t unknown_0x2C; // 0x2C /  44
-    uint32_t unknown_0x30; // 0x30 /  48
-    uint32_t unknown_0x34; // 0x34 /  52
-    uint32_t unknown_0x38; // 0x38 /  56
-    uint32_t unknown_0x3C; // 0x3C /  60
-    uint32_t unknown_0x48; // 0x48 /  72
-    uint32_t unknown_0x4C; // 0x4C /  76
-    uint32_t unknown_0x50; // 0x50 /  80
-    uint32_t unknown_0x54; // 0x54 /  84
-    uint32_t unknown_0x58; // 0x58 /  88
-    uint32_t unknown_0x5C; // 0x5C /  92
-    uint32_t unknown_0x70; // 0x70 / 112
-    uint32_t unknown_0x74; // 0x74 / 116
-    uint32_t unknown_0x7C; // 0x7C / 124
-    uint32_t unknown_0x80; // 0x80 / 128
-    uint32_t unknown_0x84; // 0x84 / 132
-    uint32_t unknown_0xB0; // 0xB0 / 176
-    uint32_t unknown_0xB4; // 0xB4 / 180
-    uint32_t unknown_0xB8; // 0xB8 / 184
-    uint32_t unknown_0xBC; // 0xBC / 188
-    uint32_t unknown_0xC0; // 0xC0 / 192
+    uint32_t geometry;
+    uint32_t texture_paletteset;
+    uint32_t lights_and_background;
+    uint32_t terrain;
+    uint32_t texture_anim_inst;
+    uint32_t palette_anim_inst;
+    uint32_t palettes_grayscale;
+    uint32_t mesh_anim_inst;
+    uint32_t anim_mesh_1;
+    uint32_t anim_mesh_2;
+    uint32_t anim_mesh_3;
+    uint32_t anim_mesh_4;
+    uint32_t anim_mesh_5;
+    uint32_t anim_mesh_6;
+    uint32_t anim_mesh_7;
+    uint32_t anim_mesh_8;
+    uint32_t poly_render_props;
 } fft_mesh_header_t;
 
 fft_mesh_header_t fft_mesh_header_read(fft_span_t* span);
