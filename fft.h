@@ -868,7 +868,7 @@ enum {
 
 typedef struct {
     uint32_t geometry;              // 0x40 /  64
-    uint32_t palettes_color;        // 0x44 /  68
+    uint32_t texture_paletteset;    // 0x44 /  68
     uint32_t lights_and_background; // 0x60 /  96
     uint32_t terrain;               // 0x64 / 100
     uint32_t texture_anim_inst;     // 0x68 / 104
@@ -1070,17 +1070,6 @@ typedef struct {
 
 typedef struct {
     polygon_t polygons[FFT_MESH_MAX_POLYGONS];
-
-    struct {
-        uint16_t polygon_count;
-
-        uint16_t tex_tri_count;    // Number of textured triangles
-        uint16_t tex_quad_count;   // Number of textured quads
-        uint16_t untex_tri_count;  // Number of untextured triangles
-        uint16_t untex_quad_count; // Number of untextured quads
-    } stats;
-
-    bool valid;
 } fft_geometry_t;
 
 static fft_geometry_t fft_geometry_read(fft_span_t* span);
@@ -1167,6 +1156,22 @@ typedef struct {
     fft_geometry_t geometry;
     fft_paletteset_t palettes_color;
     fft_lighting_t lighting;
+
+    struct {
+        // Geometry
+        uint16_t polygon_count;
+        uint16_t tex_tri_count;    // Number of textured triangles
+        uint16_t tex_quad_count;   // Number of textured quads
+        uint16_t untex_tri_count;  // Number of untextured triangles
+        uint16_t untex_quad_count; // Number of untextured quads
+
+        bool has_geometry;
+        bool has_texture_paletteset;
+        bool has_lighting;
+
+        // Lighting
+        uint8_t light_count;
+    } info;
 } fft_mesh_t;
 
 fft_mesh_t fft_mesh_read(fft_span_t* span);
@@ -1836,7 +1841,7 @@ fft_mesh_header_t fft_mesh_header_read(fft_span_t* span) {
     fft_span_set_offset(span, 0x40);
     header.geometry = fft_span_read_u32(span);
     fft_span_set_offset(span, 0x44);
-    header.palettes_color = fft_span_read_u32(span);
+    header.texture_paletteset = fft_span_read_u32(span);
     fft_span_set_offset(span, 0x64);
     header.lights_and_background = fft_span_read_u32(span); // 0x64 / 96
     fft_span_set_offset(span, 0x68);
@@ -2009,13 +2014,6 @@ static fft_geometry_t fft_geometry_read(fft_span_t* span) {
     uint16_t Q = fft_span_read_u16(span); // Untextured triangles
     uint16_t R = fft_span_read_u16(span); // Untextured quads
 
-    // Retain the counts because we store the data as a single polygon type.
-    geometry.stats.polygon_count = N + P + Q + R;
-    geometry.stats.tex_tri_count = N;
-    geometry.stats.tex_quad_count = P;
-    geometry.stats.untex_tri_count = Q;
-    geometry.stats.untex_quad_count = R;
-
     // Validate maximum values
     FFT_ASSERT(N < FFT_MESH_MAX_TEX_TRIS, "Mesh textured triangle count exceeded");
     FFT_ASSERT(P < FFT_MESH_MAX_TEX_QUADS, "Mesh textured quad count exceeded");
@@ -2053,7 +2051,6 @@ static fft_geometry_t fft_geometry_read(fft_span_t* span) {
     index = _read_tile_locations(span, &geometry, index, N);
     index = _read_tile_locations(span, &geometry, index, P);
 
-    geometry.valid = true;
     return geometry;
 }
 
@@ -2105,18 +2102,43 @@ Mesh Implementation
 */
 
 fft_mesh_t fft_mesh_read(fft_span_t* span) {
+    FFT_ASSERT(span->data != NULL && span->offset == 0, "Invalid span for mesh read");
+
     fft_mesh_t mesh = { 0 };
 
     mesh.header = fft_mesh_header_read(span);
 
-    fft_span_set_offset(span, mesh.header.geometry);
-    mesh.geometry = fft_geometry_read(span);
+    if (mesh.header.geometry != 0) {
+        fft_span_set_offset(span, mesh.header.geometry);
+        mesh.geometry = fft_geometry_read(span);
 
-    fft_span_set_offset(span, mesh.header.palettes_color);
-    mesh.palettes_color = fft_paletteset_read(span);
+        // Jump back so we can read the polygon counts.
+        fft_span_set_offset(span, mesh.header.geometry);
+        mesh.info.tex_tri_count = fft_span_read_u16(span);
+        mesh.info.tex_quad_count = fft_span_read_u16(span);
+        mesh.info.untex_tri_count = fft_span_read_u16(span);
+        mesh.info.untex_quad_count = fft_span_read_u16(span);
+        mesh.info.polygon_count = mesh.info.tex_tri_count + mesh.info.tex_quad_count + mesh.info.untex_tri_count + mesh.info.untex_quad_count;
+        mesh.info.has_geometry = true;
+    }
 
-    fft_span_set_offset(span, mesh.header.lights_and_background);
-    mesh.lighting = fft_lighting_read(span);
+    if (mesh.header.texture_paletteset != 0) {
+        fft_span_set_offset(span, mesh.header.texture_paletteset);
+        mesh.palettes_color = fft_paletteset_read(span);
+        mesh.info.has_texture_paletteset = true;
+    }
+
+    if (mesh.header.lights_and_background != 0) {
+        fft_span_set_offset(span, mesh.header.lights_and_background);
+        mesh.lighting = fft_lighting_read(span);
+        mesh.info.has_lighting = true;
+
+        for (uint32_t i = 0; i < FFT_LIGHTING_MAX_LIGHTS; i++) {
+            if (fft_light_is_valid(mesh.lighting.lights[i])) {
+                mesh.info.light_count++;
+            }
+        }
+    }
 
     return mesh;
 }
