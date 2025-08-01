@@ -1548,9 +1548,9 @@ static fft_normal_t fft_geometry_read_normal(fft_span_t* span) {
     return (fft_normal_t) { x, y, z };
 }
 
-static void _read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, bool is_textured, uint32_t* poly_offset, uint32_t count) {
+static uint32_t _read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, bool is_textured, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
-        polygon_t* poly = &g->polygons[*poly_offset + count];
+        polygon_t* poly = &g->polygons[poly_offset + count];
         poly->tex.is_textured = is_textured;
         poly->type = type;
 
@@ -1560,12 +1560,12 @@ static void _read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_e t
         }
     }
 
-    *poly_offset += count;
+    return poly_offset + count;
 }
 
-static void _read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t* poly_offset, uint32_t count) {
+static uint32_t _read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
-        polygon_t* poly = &g->polygons[*poly_offset + i];
+        polygon_t* poly = &g->polygons[poly_offset + i];
 
         // Read normals
         for (uint32_t j = 0; j < (type == FFT_POLYTYPE_TRIANGLE ? 3 : 4); j++) {
@@ -1573,10 +1573,10 @@ static void _read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_e ty
         }
     }
 
-    *poly_offset += count;
+    return poly_offset + count;
 }
 
-static void _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t* poly_offset, uint32_t count) {
+static uint32_t _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
         // Read all data
         uint8_t au = fft_span_read_u8(span);                           // 0
@@ -1596,7 +1596,7 @@ static void _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e ty
         uint8_t unknown_b = (page_and_image_and_unknown_b >> 4) & 0x0F; // bits 4–7  (0b11110000)
 
         // Populate the polygon's texture info.
-        polygon_t* poly = &g->polygons[*poly_offset + i];
+        polygon_t* poly = &g->polygons[poly_offset + i];
         poly->tex.texcoords[0] = (fft_texcoord_t) { .u = au, .v = av };
         poly->tex.texcoords[1] = (fft_texcoord_t) { .u = bu, .v = bv };
         poly->tex.texcoords[2] = (fft_texcoord_t) { .u = cu, .v = cv };
@@ -1615,10 +1615,10 @@ static void _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e ty
         }
     }
 
-    *poly_offset += count;
+    return poly_offset + count;
 }
 
-static void _read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t* poly_offset, uint32_t count) {
+static uint32_t _read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
         // Read all data
         uint8_t unknown_a = fft_span_read_u8(span); // 0
@@ -1627,17 +1627,17 @@ static void _read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t* poly_
         uint8_t unknown_d = fft_span_read_u8(span); // 3
 
         // Populate the polygon's untextured info.
-        polygon_t* poly = &g->polygons[*poly_offset + i];
+        polygon_t* poly = &g->polygons[poly_offset + i];
         poly->untex.unknown_a = unknown_a;
         poly->untex.unknown_b = unknown_b;
         poly->untex.unknown_c = unknown_c;
         poly->untex.unknown_d = unknown_d;
     }
 
-    *poly_offset += count;
+    return poly_offset + count;
 }
 
-static void _read_tile_locations(fft_span_t* span, fft_geometry_t* g, uint32_t* poly_offset, uint32_t count) {
+static uint32_t _read_tile_locations(fft_span_t* span, fft_geometry_t* g, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
         // Read all data
         uint8_t z_and_y = fft_span_read_u8(span); // y is elevation 0 or 1
@@ -1648,13 +1648,13 @@ static void _read_tile_locations(fft_span_t* span, fft_geometry_t* g, uint32_t* 
         uint8_t z = (z_and_y >> 1) & 0xFE; // 0b11111110
 
         // Populate the polygon's tile info.
-        polygon_t* poly = &g->polygons[*poly_offset + i];
+        polygon_t* poly = &g->polygons[poly_offset + i];
         poly->tiles.x = x;
         poly->tiles.z = z;
         poly->tiles.elevation = y;
     }
 
-    *poly_offset += count;
+    return poly_offset + count;
 }
 
 static fft_geometry_t fft_geometry_read(fft_span_t* span) {
@@ -1663,8 +1663,8 @@ static fft_geometry_t fft_geometry_read(fft_span_t* span) {
     // 0x40 is always the location of the primary mesh pointer.
     // 0xC4 is always the primary mesh pointer.
     span->offset = 0x40;
-    uint32_t offset = fft_span_read_u32(span);
-    span->offset = offset;
+    uint32_t primary_mesh_offset = fft_span_read_u32(span);
+    span->offset = primary_mesh_offset;
     if (span->offset == 0) {
         // Map 52's primary mesh is empty, so we can skip reading it.
         return geometry;
@@ -1688,37 +1688,36 @@ static fft_geometry_t fft_geometry_read(fft_span_t* span) {
     FFT_ASSERT(Q < FFT_MESH_MAX_UNTEX_TRIS, "Mesh untextured triangle count exceeded");
     FFT_ASSERT(R < FFT_MESH_MAX_UNTEX_QUADS, "Mesh untextured quad count exceeded");
 
-    // poly_offset is used to track the current offset in the polygons array. We
-    // pass it around and let the functions increase it by the count. It gets
-    // reset to 0 most of the time because most of this data is for the textured
-    // polygons,which come first.
-    uint32_t poly_offset = 0;
+    // index is used to track the current position in the polygons array. It
+    // gets reset to 0 most of the time because most of this data is for the
+    // textured polygons, which come first.
+    uint32_t index = 0;
 
     // Polygons
-    _read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, &poly_offset, N);
-    _read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, &poly_offset, P);
-    _read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, &poly_offset, Q);
-    _read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, &poly_offset, R);
+    index = _read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, index, N);
+    index = _read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, index, P);
+    index = _read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, index, Q);
+    index = _read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, index, R);
 
     // Normals
-    poly_offset = 0; // Reset for normals
-    _read_normals(span, &geometry, FFT_POLYTYPE_TRIANGLE, &poly_offset, N);
-    _read_normals(span, &geometry, FFT_POLYTYPE_QUAD, &poly_offset, P);
+    index = 0; // Reset for textured polygons
+    index = _read_normals(span, &geometry, FFT_POLYTYPE_TRIANGLE, index, N);
+    index = _read_normals(span, &geometry, FFT_POLYTYPE_QUAD, index, P);
 
     // Texture Coordinates
-    poly_offset = 0; // Reset for texture coordinates
-    _read_texinfo(span, &geometry, FFT_POLYTYPE_TRIANGLE, &poly_offset, N);
-    _read_texinfo(span, &geometry, FFT_POLYTYPE_QUAD, &poly_offset, P);
+    index = 0; // Reset for textured polygons
+    index = _read_texinfo(span, &geometry, FFT_POLYTYPE_TRIANGLE, index, N);
+    index = _read_texinfo(span, &geometry, FFT_POLYTYPE_QUAD, index, P);
 
     // Unknown Untextured Polygon Data
-    poly_offset = N + P; // Reset for untextured polygons
-    _read_untexinfo(span, &geometry, &poly_offset, Q);
-    _read_untexinfo(span, &geometry, &poly_offset, R);
+    index = N + P; // Reset for untextured polygons
+    index = _read_untexinfo(span, &geometry, index, Q);
+    index = _read_untexinfo(span, &geometry, index, R);
 
     // Tile Locations
-    poly_offset = 0; // Reset for terrain locations
-    _read_tile_locations(span, &geometry, &poly_offset, N);
-    _read_tile_locations(span, &geometry, &poly_offset, P);
+    index = 0; // Reset for textured polygons
+    index = _read_tile_locations(span, &geometry, index, N);
+    index = _read_tile_locations(span, &geometry, index, P);
 
     geometry.valid = true;
     return geometry;
