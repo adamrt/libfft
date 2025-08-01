@@ -145,26 +145,20 @@ void read_geometry(void) {
         uint32_t count = fft_record_read_all(&gns, records);
         fft_io_close(gns);
 
-        fft_record_t primary = { 0 };
         for (uint8_t j = 0; j < count; j++) {
-            fft_record_t tmp = records[j];
-            if (tmp.type != FFT_RECORDTYPE_MESH_PRIMARY) {
+            fft_record_t primary = records[j];
+            if (primary.type != FFT_RECORDTYPE_MESH_PRIMARY) {
                 continue;
             }
-            primary = tmp;
-            break;
-        }
+            if (primary.sector == 0) {
+                continue;
+            }
 
-        if (primary.sector == 0) {
-            continue;
-        }
+            fft_span_t file = fft_io_read(primary.sector, primary.length);
+            fft_mesh_t mesh = fft_mesh_read(&file);
 
-        fft_span_t file = fft_io_read(primary.sector, primary.length);
-        fft_geometry_t geom = fft_geometry_read(&file);
-        if (!geom.valid) {
-            printf("geometry invalid: %d\n", i);
+            mesh.geometry.valid = true;
+            fft_io_close(file);
         }
-
-        fft_io_close(file);
     }
 }
