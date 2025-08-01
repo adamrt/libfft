@@ -712,6 +712,43 @@ typedef struct {
 
 /*
 ================================================================================
+Colors
+================================================================================
+*/
+
+// 16-bit BGR555 + 1-bit alpha format
+// ABBBBBGGGGGRRRRR
+typedef struct {
+    uint16_t r : 5; // Red   (0–31)
+    uint16_t g : 5; // Green (0–31)
+    uint16_t b : 5; // Blue  (0–31)
+    uint16_t a : 1; // Alpha (0 = transparent, 1 = opaque)
+} fft_color5551_t;
+
+// 48-bit RGB fixed-point format. This color is use for lighting colors and
+// possibly other places that require higher precision colors.
+typedef struct {
+    fft_fixed16_t r;
+    fft_fixed16_t g;
+    fft_fixed16_t b;
+} fft_color48_t;
+
+// 24-bit RGB888 format. This color is used for ambient light, at least.
+typedef struct {
+    uint8_t r; // Red   (0–255)
+    uint8_t g; // Green (0–255)
+    uint8_t b; // Blue  (0–255)
+} fft_color888_t;
+
+fft_color5551_t fft_color5551_read(fft_span_t* span);
+fft_color48_t fft_color48_read(fft_span_t* span);
+fft_color888_t fft_color888_read(fft_span_t* span);
+
+bool fft_color5551_is_transparent(fft_color5551_t color);
+
+/*
+/*
+================================================================================
 Images
 ================================================================================
 */
@@ -1458,6 +1495,42 @@ const char* fft_recordtype_str(fft_recordtype_e value) {
     }
 }
 
+/*
+================================================================================
+Colors Implementation
+================================================================================
+*/
+fft_color5551_t fft_color5551_read(fft_span_t* span) {
+    uint16_t raw = fft_span_read_u16(span);
+    fft_color5551_t color = { 0 };
+    color.a = (raw >> 15) & 0x1;  // A 1-bit
+    color.b = (raw >> 10) & 0x1F; // B 5-bits
+    color.g = (raw >> 5) & 0x1F;  // G 5-bits
+    color.r = (raw >> 0) & 0x1F;  // R 5-bits
+    return color;
+}
+
+fft_color48_t fft_color48_read(fft_span_t* span) {
+    fft_color48_t color = { 0 };
+    color.r = fft_span_read_i16(span); // 16 bits for red
+    color.g = fft_span_read_i16(span); // 16 bits for green
+    color.b = fft_span_read_i16(span); // 16 bits for blue
+    return color;
+}
+
+fft_color888_t fft_color888_read(fft_span_t* span) {
+    fft_color888_t color = { 0 };
+    color.r = fft_span_read_u8(span); // 8 bits for red
+    color.g = fft_span_read_u8(span); // 8 bits for green
+    color.b = fft_span_read_u8(span); // 8 bits for blue
+    return color;
+}
+
+bool fft_color5551_is_transparent(fft_color5551_t color) {
+    return (color.r + color.g + color.b + color.a) == 0;
+}
+
+/*
 /*
 ================================================================================
 Images Implementation
