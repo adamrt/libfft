@@ -1084,6 +1084,49 @@ typedef struct {
 
 static fft_geometry_t fft_geometry_read(fft_span_t* span);
 
+/*
+================================================================================
+Lights and Background
+================================================================================
+
+Each map can have up to 3 directional lights, an ambient color and two
+background colors. The background colors (top and bottom) and they are linearly
+interpolated between the two colors.
+
+The directional light section always contains the space for 3 lights. But if the
+color is completely black (0, 0, 0), then the light is considered to be disabled
+by the engine.
+
+  - fft_light_t is a directional light.
+  - fft_lighting_t is the full lighting state for a map.
+
+================================================================================
+*/
+
+enum {
+    FFT_LIGHTING_MAX_LIGHTS = 3,
+};
+
+typedef struct {
+    fft_color48_t color;
+    fft_position_t position;
+} fft_light_t;
+
+typedef struct {
+    fft_light_t lights[FFT_LIGHTING_MAX_LIGHTS];
+    fft_color888_t ambient_color;
+    fft_color888_t background_top;
+    fft_color888_t background_bottom;
+
+    // Extra 3 bytes that we don't know the purpose of.
+    uint8_t unknown_a;
+    uint8_t unknown_b;
+    uint8_t unknown_c;
+} fft_lighting_t;
+
+fft_lighting_t fft_lighting_read(fft_span_t* span);
+
+================================================================================
 #ifdef __cplusplus
 }
 #endif
@@ -2000,6 +2043,47 @@ static fft_geometry_t fft_geometry_read(fft_span_t* span) {
 
     geometry.valid = true;
     return geometry;
+}
+
+/*
+================================================================================
+Lights and Background Implementation
+================================================================================
+*/
+
+static bool fft_light_is_valid(fft_light_t light) {
+    return light.color.r + light.color.g + light.color.b > 0.0f;
+}
+
+fft_lighting_t fft_lighting_read(fft_span_t* span) {
+    fft_lighting_t l = { 0 };
+
+    // Light colors are oddly stored all 3xR then 3xG then 3xB.
+    l.lights[0].color.r = fft_span_read_i16(span);
+    l.lights[1].color.r = fft_span_read_i16(span);
+    l.lights[2].color.r = fft_span_read_i16(span);
+    l.lights[0].color.g = fft_span_read_i16(span);
+    l.lights[1].color.g = fft_span_read_i16(span);
+    l.lights[2].color.g = fft_span_read_i16(span);
+    l.lights[0].color.b = fft_span_read_i16(span);
+    l.lights[1].color.b = fft_span_read_i16(span);
+    l.lights[2].color.b = fft_span_read_i16(span);
+
+    // Positions are stored as expected.
+    l.lights[0].position = fft_geometry_read_position(span);
+    l.lights[1].position = fft_geometry_read_position(span);
+    l.lights[2].position = fft_geometry_read_position(span);
+
+    l.ambient_color = fft_color888_read(span);
+
+    l.background_top = fft_color888_read(span);
+    l.background_bottom = fft_color888_read(span);
+
+    l.unknown_a = fft_span_read_u8(span);
+    l.unknown_b = fft_span_read_u8(span);
+    l.unknown_c = fft_span_read_u8(span);
+
+    return l;
 }
 
 /*
