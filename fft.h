@@ -746,7 +746,7 @@ typedef struct {
     uint16_t g : 5; // Green (0–31)
     uint16_t b : 5; // Blue  (0–31)
     uint16_t a : 1; // Alpha (0 = transparent, 1 = opaque)
-} fft_color5551_t;
+} fft_color_5551_t;
 
 // 48-bit RGB fixed-point format. This color is use for lighting colors and
 // possibly other places that require higher precision colors.
@@ -754,20 +754,20 @@ typedef struct {
     fft_fixed16_t r;
     fft_fixed16_t g;
     fft_fixed16_t b;
-} fft_color48_t;
+} fft_color_rgb16_t;
 
 // 24-bit RGB888 format. This color is used for ambient light, at least.
 typedef struct {
     uint8_t r; // Red   (0–255)
     uint8_t g; // Green (0–255)
     uint8_t b; // Blue  (0–255)
-} fft_color888_t;
+} fft_color_rgb8_t;
 
-fft_color5551_t fft_color5551_read(fft_span_t* span);
-fft_color48_t fft_color48_read(fft_span_t* span);
-fft_color888_t fft_color888_read(fft_span_t* span);
+fft_color_5551_t fft_color_5551_read(fft_span_t* span);
+fft_color_rgb16_t fft_color_rgb16_read(fft_span_t* span);
+fft_color_rgb8_t fft_color_rgb8_read(fft_span_t* span);
 
-bool fft_color5551_is_transparent(fft_color5551_t color);
+bool fft_color_5551_is_transparent(fft_color_5551_t color);
 
 /*
 ================================================================================
@@ -781,7 +781,7 @@ enum {
 };
 
 typedef struct {
-    fft_color5551_t colors[FFT_PALETTE_COLOR_COUNT];
+    fft_color_5551_t colors[FFT_PALETTE_COLOR_COUNT];
 } fft_palette_t;
 
 typedef struct {
@@ -794,6 +794,12 @@ fft_paletteset_t fft_paletteset_read(fft_span_t* span);
 /*
 ================================================================================
 Images
+================================================================================
+
+Images can represent textures, sprites, or other graphical assets in the game.
+
+They are RGBA8.
+
 ================================================================================
 */
 
@@ -1089,15 +1095,15 @@ enum {
 };
 
 typedef struct {
-    fft_color48_t color;
+    fft_color_rgb16_t color;
     fft_position_t position;
 } fft_light_t;
 
 typedef struct {
     fft_light_t lights[FFT_LIGHTING_MAX_LIGHTS];
-    fft_color888_t ambient_color;
-    fft_color888_t background_top;
-    fft_color888_t background_bottom;
+    fft_color_rgb8_t ambient_color;
+    fft_color_rgb8_t background_top;
+    fft_color_rgb8_t background_bottom;
 
     // Extra 3 bytes that we don't know the purpose of.
     uint8_t unknown_a;
@@ -1914,9 +1920,9 @@ const char* fft_recordtype_str(fft_recordtype_e value) {
 Colors Implementation
 ================================================================================
 */
-fft_color5551_t fft_color5551_read(fft_span_t* span) {
+fft_color_5551_t fft_color_5551_read(fft_span_t* span) {
     uint16_t raw = fft_span_read_u16(span);
-    fft_color5551_t color = { 0 };
+    fft_color_5551_t color = { 0 };
     color.a = (raw >> 15) & 0x1;  // A 1-bit
     color.b = (raw >> 10) & 0x1F; // B 5-bits
     color.g = (raw >> 5) & 0x1F;  // G 5-bits
@@ -1924,23 +1930,23 @@ fft_color5551_t fft_color5551_read(fft_span_t* span) {
     return color;
 }
 
-fft_color48_t fft_color48_read(fft_span_t* span) {
-    fft_color48_t color = { 0 };
+fft_color_rgb16_t fft_color_rgb16_read(fft_span_t* span) {
+    fft_color_rgb16_t color = { 0 };
     color.r = fft_span_read_i16(span); // 16 bits for red
     color.g = fft_span_read_i16(span); // 16 bits for green
     color.b = fft_span_read_i16(span); // 16 bits for blue
     return color;
 }
 
-fft_color888_t fft_color888_read(fft_span_t* span) {
-    fft_color888_t color = { 0 };
+fft_color_rgb8_t fft_color_rgb8_read(fft_span_t* span) {
+    fft_color_rgb8_t color = { 0 };
     color.r = fft_span_read_u8(span); // 8 bits for red
     color.g = fft_span_read_u8(span); // 8 bits for green
     color.b = fft_span_read_u8(span); // 8 bits for blue
     return color;
 }
 
-bool fft_color5551_is_transparent(fft_color5551_t color) {
+bool fft_color_5551_is_transparent(fft_color_5551_t color) {
     return (color.r + color.g + color.b + color.a) == 0;
 }
 
@@ -1953,7 +1959,7 @@ Palettes Implementation
 fft_palette_t fft_palette_read(fft_span_t* span) {
     fft_palette_t palette = { 0 };
     for (uint32_t i = 0; i < FFT_PALETTE_COLOR_COUNT; i++) {
-        palette.colors[i] = fft_color5551_read(span);
+        palette.colors[i] = fft_color_5551_read(span);
     }
 
     return palette;
@@ -2392,10 +2398,10 @@ fft_lighting_t fft_lighting_read(fft_span_t* span) {
     l.lights[1].position = fft_geometry_read_position(span);
     l.lights[2].position = fft_geometry_read_position(span);
 
-    l.ambient_color = fft_color888_read(span);
+    l.ambient_color = fft_color_rgb8_read(span);
 
-    l.background_top = fft_color888_read(span);
-    l.background_bottom = fft_color888_read(span);
+    l.background_top = fft_color_rgb8_read(span);
+    l.background_bottom = fft_color_rgb8_read(span);
 
     l.unknown_a = fft_span_read_u8(span);
     l.unknown_b = fft_span_read_u8(span);
