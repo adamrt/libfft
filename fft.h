@@ -1271,6 +1271,31 @@ typedef struct {
 
 fft_mesh_t fft_mesh_read(fft_span_t* span);
 
+/*
+================================================================================
+Texture
+================================================================================
+
+A texture is just an image_t with a map state. This allows us to track the state
+without having to store it in the image itself.
+
+================================================================================
+*/
+
+enum {
+    FFT_TEXTURE_WIDTH = 256,
+    FFT_TEXTURE_HEIGHT = 1024,
+};
+
+typedef struct {
+    fft_state_t state;
+    fft_image_t image;
+} fft_texture_t;
+
+static fft_texture_t fft_texture_read(fft_span_t* span, fft_state_t state);
+static void fft_texture_destroy(fft_texture_t texture);
+
+/*
 #ifdef __cplusplus
 }
 #endif
@@ -1899,6 +1924,14 @@ static void fft_image_scale_paletted(fft_image_t* image) {
     }
 }
 
+static void fft_image_destroy(fft_image_t* image) {
+    if (image && image->data) {
+        FFT_MEM_FREE(image->data);
+        image->data = NULL;
+        image->valid = false;
+    }
+}
+
 static bool fft_image_write_ppm(const fft_image_t* image, const char* path) {
     if (!image || !image->valid || !image->data) {
         return false;
@@ -2375,6 +2408,25 @@ fft_mesh_t fft_mesh_read(fft_span_t* span) {
     return mesh;
 }
 
+/*
+================================================================================
+Texture Implementation
+================================================================================
+*/
+
+static void fft_texture_destroy(fft_texture_t texture) {
+    fft_image_destroy(&texture.image);
+}
+
+static fft_texture_t fft_texture_read(fft_span_t* span, fft_state_t state) {
+    fft_image_t image = fft_image_read_4bpp(span, FFT_TEXTURE_WIDTH, FFT_TEXTURE_HEIGHT);
+    return (fft_texture_t) {
+        .state = state,
+        .image = image,
+    };
+}
+
+/*
 /*
 ================================================================================
 Entrypoint Implementation
