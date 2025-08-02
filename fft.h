@@ -700,7 +700,7 @@ const char* fft_recordtype_str(fft_recordtype_e value);
 // It is mostly to be able to show each record in the UI with some metadata.
 typedef struct {
     bool has_geometry;
-    bool has_texture_paletteset;
+    bool has_clut;
     bool has_lighting;
     bool has_terrain;
 
@@ -771,25 +771,32 @@ bool fft_color_5551_is_transparent(fft_color_5551_t color);
 
 /*
 ================================================================================
-Palettes
+CLUT
 ================================================================================
+
+A CLUT (Color Look-Up Table) is a palette of colors used for 4bpp and 8bpp
+images. Map textures and sprites often use CLUTs to define the colors used in
+the image. Each CLUT is a set of colors that can be indexed by the image data.
+
+================================================================================
+
 */
 
 enum {
-    FFT_PALETTE_COLOR_COUNT = 16,      // Number of colors in a palette
-    FFT_PALETTESET_PALETTE_COUNT = 16, // Number of palettes in a palette set
+    FFT_CLUT_ROW_WIDTH = 16, // Number of colors in a row of a CLUT
+    FFT_CLUT_ROW_COUNT = 16, // Number of rows in a CLUT
 };
 
 typedef struct {
-    fft_color_5551_t colors[FFT_PALETTE_COLOR_COUNT];
-} fft_palette_t;
+    fft_color_5551_t colors[FFT_CLUT_ROW_WIDTH];
+} fft_clut_row_t;
 
 typedef struct {
-    fft_palette_t palettes[FFT_PALETTESET_PALETTE_COUNT];
-} fft_paletteset_t;
+    fft_clut_row_t rows[FFT_CLUT_ROW_COUNT];
+} fft_clut_t;
 
-fft_palette_t fft_palette_read(fft_span_t* span);
-fft_paletteset_t fft_paletteset_read(fft_span_t* span);
+fft_clut_row_t fft_clut_row_read(fft_span_t* span);
+fft_clut_t fft_clut_read(fft_span_t* span);
 
 /*
 ================================================================================
@@ -878,12 +885,12 @@ The gaps in the 196 bytes are filled with 0x00 for every mesh file.
 
 enum {
     FFT_MESH_PTR_GEOMETRY = 0x40,
-    FFT_MESH_PTR_PALETTES_COLOR = 0x44,
+    FFT_MESH_PTR_CLUT_COLOR = 0x44,
     FFT_MESH_PTR_LIGHT_AND_BACKGROUND = 0x64,
     FFT_MESH_PTR_TERRAIN = 0x68,
     FFT_MESH_PTR_TEXTURE_ANIM_INST = 0x6c,
     FFT_MESH_PTR_PALETTE_ANIM_INST = 0x70,
-    FFT_MESH_PTR_PALETTES_GRAYSCALE = 0x7c,
+    FFT_MESH_PTR_CLUT_GRAY = 0x7c,
     FFT_MESH_PTR_MESH_ANIM_INST = 0x8c,
     FFT_MESH_PTR_ANIM_MESH_1 = 0x90,
     FFT_MESH_PTR_ANIM_MESH_2 = 0x94,
@@ -898,12 +905,12 @@ enum {
 
 typedef struct {
     uint32_t geometry;
-    uint32_t texture_paletteset;
+    uint32_t clut_color;
     uint32_t lights_and_background;
     uint32_t terrain;
     uint32_t texture_anim_inst;
     uint32_t palette_anim_inst;
-    uint32_t palettes_grayscale;
+    uint32_t clut_gray;
     uint32_t mesh_anim_inst;
     uint32_t anim_mesh_1;
     uint32_t anim_mesh_2;
@@ -923,7 +930,7 @@ fft_mesh_header_t fft_mesh_header_read(fft_span_t* span);
 Geometry
 ================================================================================
 
-Geometry is the map's polygons, vertices, tiles and uv/palette data. It is the
+Geometry is the map's polygons, vertices, tiles and uv/clut data. It is the
 first chuck of a mesh file after the header.
 
 This is required for the default state, but is optional for all other states.
@@ -973,7 +980,7 @@ The header contains 4x u16 with the number of each type of polyon.
 
 * Textured Info
 
-  This information contains the texture coordinates, palette, page, and some
+  This information contains the texture coordinates, clut, page, and some
   unknown fields. The page is a relic of the PS1 hardware. Texture sizes were
   limited to 256x256 pixels, so textures were split into pages of 256x256
   pixels. So a texture is 256x1024. This is basically 4 pages sitting on top of
@@ -1030,7 +1037,7 @@ typedef enum {
 
 typedef struct {
     fft_texcoord_t texcoords[4]; // Up to 4 texcoords for quads
-    uint8_t palette;
+    uint8_t clut;
     uint8_t page;
     // image_to_use: 3 == texture map, other values are for UI, fonts, icons
     uint8_t image_to_use;
@@ -1244,7 +1251,7 @@ Mesh
 ================================================================================
 
 Mesh is the main data structure for a map. It contains all the geometry,
-palettes, lighting, terrain, animations, etc.
+cluts, lighting, terrain, animations, etc.
 
 "Primary Mesh" below refers to recordtype FFT_RECORDTYPE_MESH_PRIMARY.
 
@@ -1252,12 +1259,12 @@ palettes, lighting, terrain, animations, etc.
 | Field                 | Primary Mesh | Other Meshes | Notes          |
 +-----------------------+----------------------------------------------+
 | geometry              | Mandatory    | Optional     | MAP052 missing |
-| palettes_color        | Mandatory    | Optional     |                |
+| clut_color            | Mandatory    | Optional     |                |
 | lights_and_background | Mandatory    | Optional     | Confirm        |
 | terrain               | Mandatory    | Optional     |                |
 | texture_anim_inst     | Optional     | Optional     |                |
 | palette_anim_inst     | Optional     | Optional     |                |
-| palettes_grayscale    | Mandatory    | Optional     |                |
+| clut_gray             | Mandatory    | Optional     |                |
 | mesh_anim_inst        | Optional     | Optional     |                |
 | anim_mesh_1           | Optional     | Optional     |                |
 | anim_mesh_2           | Optional     | Optional     |                |
@@ -1278,7 +1285,7 @@ typedef struct {
 
     fft_mesh_header_t header;
     fft_geometry_t geometry;
-    fft_paletteset_t palettes_color;
+    fft_clut_t clut;
     fft_lighting_t lighting;
     fft_terrain_t terrain;
 
@@ -1318,7 +1325,7 @@ Map Data
 ================================================================================
 
 Map data is the main structure that contains all the information about a map.
-This contains all the records, meshes, images, palettes, etc for all map states.
+This contains all the records, meshes, images, cluts, etc for all map states.
 
 ================================================================================
 */
@@ -1952,25 +1959,25 @@ bool fft_color_5551_is_transparent(fft_color_5551_t color) {
 
 /*
 ================================================================================
-Palettes Implementation
+CLUT Implementation
 ================================================================================
 */
 
-fft_palette_t fft_palette_read(fft_span_t* span) {
-    fft_palette_t palette = { 0 };
-    for (uint32_t i = 0; i < FFT_PALETTE_COLOR_COUNT; i++) {
-        palette.colors[i] = fft_color_5551_read(span);
+fft_clut_row_t fft_clut_row_read(fft_span_t* span) {
+    fft_clut_row_t row = { 0 };
+    for (uint32_t i = 0; i < FFT_CLUT_ROW_WIDTH; i++) {
+        row.colors[i] = fft_color_5551_read(span);
     }
 
-    return palette;
+    return row;
 }
 
-fft_paletteset_t fft_paletteset_read(fft_span_t* span) {
-    fft_paletteset_t palette_set = { 0 };
-    for (uint32_t i = 0; i < FFT_PALETTESET_PALETTE_COUNT; i++) {
-        palette_set.palettes[i] = fft_palette_read(span);
+fft_clut_t fft_clut_read(fft_span_t* span) {
+    fft_clut_t clut = { 0 };
+    for (uint32_t i = 0; i < FFT_CLUT_ROW_COUNT; i++) {
+        clut.rows[i] = fft_clut_row_read(span);
     }
-    return palette_set;
+    return clut;
 }
 
 /*
@@ -2050,13 +2057,13 @@ static fft_image_t fft_image_read_16bpp(fft_span_t* span, uint32_t width, uint32
 
 // Take a 4bpp image and a 16bpp palette (CLUT) and convert the image to a
 // palettized format.
-static void fft_image_palettize(fft_image_t* image, const fft_image_t* palette, uint8_t pal_index) {
+static void fft_image_palettize(fft_image_t* image, const fft_image_t* clut, uint8_t pal_index) {
     const uint32_t pixel_count = image->width * image->height;
     const uint32_t pal_offset = (FFT_IMAGE_PAL_ROW_SIZE * pal_index);
 
     for (uint32_t i = 0; i < pixel_count * 4; i = i + 4) {
         uint8_t pixel = image->data[i];
-        memcpy(&image->data[i], &palette->data[pal_offset + (pixel * 4)], 4);
+        memcpy(&image->data[i], &clut->data[pal_offset + (pixel * 4)], 4);
     }
 }
 
@@ -2064,14 +2071,13 @@ static fft_image_t fft_image_read_4bpp_palettized(fft_span_t* span, fft_image_de
     // Read the 4bpp image data.
     fft_image_t image = fft_image_read_4bpp(span, desc.width, desc.height);
 
-    // Read the palette (CLUT) data.
+    // Read the clut data.
     fft_span_set_offset(span, desc.pal_offset);
-    fft_image_t palette = fft_image_read_16bpp(span, FFT_IMAGE_PAL_COL_COUNT, desc.pal_count);
+    fft_image_t clut = fft_image_read_16bpp(span, FFT_IMAGE_PAL_COL_COUNT, desc.pal_count);
 
-    fft_image_palettize(&image, &palette, pal_index);
+    fft_image_palettize(&image, &clut, pal_index);
 
-    // Free the palette data.
-    FFT_MEM_FREE(palette.data);
+    FFT_MEM_FREE(clut.data);
 
     return image;
 }
@@ -2156,7 +2162,7 @@ fft_mesh_header_t fft_mesh_header_read(fft_span_t* span) {
     fft_span_set_offset(span, 0x40);
     header.geometry = fft_span_read_u32(span);
     fft_span_set_offset(span, 0x44);
-    header.texture_paletteset = fft_span_read_u32(span);
+    header.clut_color = fft_span_read_u32(span);
     fft_span_set_offset(span, 0x64);
     header.lights_and_background = fft_span_read_u32(span); // 0x64 / 96
     fft_span_set_offset(span, 0x68);
@@ -2166,7 +2172,7 @@ fft_mesh_header_t fft_mesh_header_read(fft_span_t* span) {
     fft_span_set_offset(span, 0x70);
     header.palette_anim_inst = fft_span_read_u32(span); // 0x6C / 108
     fft_span_set_offset(span, 0x7C);
-    header.palettes_grayscale = fft_span_read_u32(span); // 0x78 / 120
+    header.clut_gray = fft_span_read_u32(span); // 0x78 / 120
     fft_span_set_offset(span, 0x8C);
     header.mesh_anim_inst = fft_span_read_u32(span); // 0x88 / 136
     fft_span_set_offset(span, 0x90);
@@ -2244,7 +2250,7 @@ static uint32_t _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_
         // Read all data
         uint8_t au = fft_span_read_u8(span);                           // 0
         uint8_t av = fft_span_read_u8(span);                           // 1
-        uint8_t palette = fft_span_read_u8(span);                      // 2
+        uint8_t clut = fft_span_read_u8(span);                         // 2
         uint8_t unknown_a = fft_span_read_u8(span);                    // 3
         uint8_t bu = fft_span_read_u8(span);                           // 4
         uint8_t bv = fft_span_read_u8(span);                           // 5
@@ -2263,7 +2269,7 @@ static uint32_t _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_
         poly->tex.texcoords[0] = (fft_texcoord_t) { .u = au, .v = av };
         poly->tex.texcoords[1] = (fft_texcoord_t) { .u = bu, .v = bv };
         poly->tex.texcoords[2] = (fft_texcoord_t) { .u = cu, .v = cv };
-        poly->tex.palette = palette;
+        poly->tex.clut = clut;
         poly->tex.page = page;
         poly->tex.image_to_use = image;
         poly->tex.unknown_a = unknown_a;
@@ -2568,10 +2574,10 @@ fft_mesh_t fft_mesh_read(fft_span_t* span) {
         mesh.meta.has_geometry = true;
     }
 
-    if (mesh.header.texture_paletteset != 0) {
-        fft_span_set_offset(span, mesh.header.texture_paletteset);
-        mesh.palettes_color = fft_paletteset_read(span);
-        mesh.meta.has_texture_paletteset = true;
+    if (mesh.header.clut_color != 0) {
+        fft_span_set_offset(span, mesh.header.clut_color);
+        mesh.clut = fft_clut_read(span);
+        mesh.meta.has_clut = true;
     }
 
     if (mesh.header.lights_and_background != 0) {
