@@ -694,6 +694,27 @@ typedef enum {
 
 const char* fft_recordtype_str(fft_recordtype_e value);
 
+// This is used to store metadata for the record, after reading the related
+// file. This is only relevant for mesh files because textures have no meta
+// data. This struct is attached to the fft_mesh_t and the fft_record_t.
+// It is mostly to be able to show each record in the UI with some metadata.
+typedef struct {
+    bool has_geometry;
+    bool has_texture_paletteset;
+    bool has_lighting;
+    bool has_terrain;
+
+    // Geometry
+    uint16_t polygon_count;
+    uint16_t tex_tri_count;    // Number of textured triangles
+    uint16_t tex_quad_count;   // Number of textured quads
+    uint16_t untex_tri_count;  // Number of untextured triangles
+    uint16_t untex_quad_count; // Number of untextured quads
+
+    // Lighting
+    uint8_t light_count;
+} fft_record_meta_t;
+
 typedef struct {
     fft_recordtype_e type;
     fft_state_t state;
@@ -708,6 +729,8 @@ typedef struct {
     uint16_t jj;
 
     uint8_t raw[FFT_RECORD_SIZE]; // Raw data for debugging
+
+    fft_record_meta_t meta;
 } fft_record_t;
 
 /*
@@ -1245,28 +1268,16 @@ palettes, lighting, terrain, animations, etc.
 */
 
 typedef struct {
+    fft_state_t state;
+
     fft_mesh_header_t header;
     fft_geometry_t geometry;
     fft_paletteset_t palettes_color;
     fft_lighting_t lighting;
     fft_terrain_t terrain;
 
-    struct {
-        // Geometry
-        uint16_t polygon_count;
-        uint16_t tex_tri_count;    // Number of textured triangles
-        uint16_t tex_quad_count;   // Number of textured quads
-        uint16_t untex_tri_count;  // Number of untextured triangles
-        uint16_t untex_quad_count; // Number of untextured quads
+    fft_record_meta_t meta;
 
-        bool has_geometry;
-        bool has_texture_paletteset;
-        bool has_lighting;
-        bool has_terrain;
-
-        // Lighting
-        uint8_t light_count;
-    } meta;
 } fft_mesh_t;
 
 fft_mesh_t fft_mesh_read(fft_span_t* span);
@@ -1296,6 +1307,176 @@ static fft_texture_t fft_texture_read(fft_span_t* span, fft_state_t state);
 static void fft_texture_destroy(fft_texture_t texture);
 
 /*
+================================================================================
+Map Data
+================================================================================
+
+Map data is the main structure that contains all the information about a map.
+This contains all the records, meshes, images, palettes, etc for all map states.
+
+================================================================================
+*/
+
+// map_desc_t is a struct that contains information about a map.
+// This lets us know if we can use the map and where on the disk it is.
+typedef struct {
+    uint8_t id;
+    fft_io_entry_e entry;
+    bool valid;
+    const char* name;
+} fft_map_desc_t;
+
+typedef struct {
+    fft_record_t records[FFT_RECORD_MAX];
+
+    fft_mesh_t primary_mesh;
+    fft_mesh_t override_mesh;
+    fft_mesh_t alt_meshes[20];
+    fft_texture_t textures[20];
+
+    uint8_t record_count;
+    uint8_t texture_count;
+    uint8_t alt_mesh_count;
+} fft_map_data_t;
+
+enum {
+    FFT_MAP_DESC_LIST_COUNT = 128,
+};
+
+void fft_map_data_destroy(fft_map_data_t* map);
+fft_map_data_t* fft_map_data_read(int map_id);
+
+fft_map_desc_t fft_map_list[FFT_MAP_DESC_LIST_COUNT] = {
+    { 0, F_MAP__MAP000_GNS, false, "Unknown" }, // No texture
+    { 1, F_MAP__MAP001_GNS, true, "At Main Gate of Igros Castle" },
+    { 2, F_MAP__MAP002_GNS, true, "Back Gate of Lesalia Castle" },
+    { 3, F_MAP__MAP003_GNS, true, "Hall of St. Murond Temple" },
+    { 4, F_MAP__MAP004_GNS, true, "Office of Lesalia Castle" },
+    { 5, F_MAP__MAP005_GNS, true, "Roof of Riovanes Castle" },
+    { 6, F_MAP__MAP006_GNS, true, "At the Gate of Riovanes Castle" },
+    { 7, F_MAP__MAP007_GNS, true, "Inside of Riovanes Castle" },
+    { 8, F_MAP__MAP008_GNS, true, "Riovanes Castle" },
+    { 9, F_MAP__MAP009_GNS, true, "Citadel of Igros Castle" },
+    { 10, F_MAP__MAP010_GNS, true, "Inside of Igros Castle" },
+    { 11, F_MAP__MAP011_GNS, true, "Office of Igros Castle" },
+    { 12, F_MAP__MAP012_GNS, true, "At the Gate of Lionel Castle" },
+    { 13, F_MAP__MAP013_GNS, true, "Inside of Lionel Castle" },
+    { 14, F_MAP__MAP014_GNS, true, "Office of Lionel Castle" },
+    { 15, F_MAP__MAP015_GNS, true, "At the Gate of Limberry Castle (1)" },
+    { 16, F_MAP__MAP016_GNS, true, "Inside of Limberry Castle" },
+    { 17, F_MAP__MAP017_GNS, true, "Underground Cemetery of Limberry Castle" },
+    { 18, F_MAP__MAP018_GNS, true, "Office of Limberry Castle" },
+    { 19, F_MAP__MAP019_GNS, true, "At the Gate of Limberry Castle (2)" },
+    { 20, F_MAP__MAP020_GNS, true, "Inside of Zeltennia Castle" },
+    { 21, F_MAP__MAP021_GNS, true, "Zeltennia Castle" },
+    { 22, F_MAP__MAP022_GNS, true, "Magic City Gariland" },
+    { 23, F_MAP__MAP023_GNS, true, "Belouve Residence" },
+    { 24, F_MAP__MAP024_GNS, true, "Military Academy's Auditorium" },
+    { 25, F_MAP__MAP025_GNS, true, "Yardow Fort City" },
+    { 26, F_MAP__MAP026_GNS, true, "Weapon Storage of Yardow" },
+    { 27, F_MAP__MAP027_GNS, true, "Goland Coal City" },
+    { 28, F_MAP__MAP028_GNS, true, "Colliery Underground First Floor" },
+    { 29, F_MAP__MAP029_GNS, true, "Colliery Underground Second Floor" },
+    { 30, F_MAP__MAP030_GNS, true, "Colliery Underground Third Floor" },
+    { 31, F_MAP__MAP031_GNS, true, "Dorter Trade City" },
+    { 32, F_MAP__MAP032_GNS, true, "Slums in Dorter" },
+    { 33, F_MAP__MAP033_GNS, true, "Hospital in Slums" },
+    { 34, F_MAP__MAP034_GNS, true, "Cellar of Sand Mouse" },
+    { 35, F_MAP__MAP035_GNS, true, "Zaland Fort City" },
+    { 36, F_MAP__MAP036_GNS, true, "Church Outside of Town" },
+    { 37, F_MAP__MAP037_GNS, true, "Ruins Outside Zaland" },
+    { 38, F_MAP__MAP038_GNS, true, "Goug Machine City" },
+    { 39, F_MAP__MAP039_GNS, true, "Underground Passage in Goland" },
+    { 40, F_MAP__MAP040_GNS, true, "Slums in Goug" },
+    { 41, F_MAP__MAP041_GNS, true, "Besrodio's House" },
+    { 42, F_MAP__MAP042_GNS, true, "Warjilis Trade City" },
+    { 43, F_MAP__MAP043_GNS, true, "Port of Warjilis" },
+    { 44, F_MAP__MAP044_GNS, true, "Bervenia Free City" },
+    { 45, F_MAP__MAP045_GNS, true, "Ruins of Zeltennia Castle's Church" },
+    { 46, F_MAP__MAP046_GNS, true, "Cemetery of Heavenly Knight, Balbanes" },
+    { 47, F_MAP__MAP047_GNS, true, "Zarghidas Trade City" },
+    { 48, F_MAP__MAP048_GNS, true, "Slums of Zarghidas" },
+    { 49, F_MAP__MAP049_GNS, true, "Fort Zeakden" },
+    { 50, F_MAP__MAP050_GNS, true, "St. Murond Temple" },
+    { 51, F_MAP__MAP051_GNS, true, "St. Murond Temple" },
+    { 52, F_MAP__MAP052_GNS, true, "Chapel of St. Murond Temple" },
+    { 53, F_MAP__MAP053_GNS, true, "Entrance to Death City" },
+    { 54, F_MAP__MAP054_GNS, true, "Lost Sacred Precincts" },
+    { 55, F_MAP__MAP055_GNS, true, "Graveyard of Airships" },
+    { 56, F_MAP__MAP056_GNS, true, "Orbonne Monastery" },
+    { 57, F_MAP__MAP057_GNS, true, "Underground Book Storage First Floor" },
+    { 58, F_MAP__MAP058_GNS, true, "Underground Book Storage Second Floor" },
+    { 59, F_MAP__MAP059_GNS, true, "Underground Book Storage Third Floor" },
+    { 60, F_MAP__MAP060_GNS, true, "Underground Book Storage Fourth Floor" },
+    { 61, F_MAP__MAP061_GNS, true, "Underground Book Storage Fifth Floor" },
+    { 62, F_MAP__MAP062_GNS, true, "Chapel of Orbonne Monastery" },
+    { 63, F_MAP__MAP063_GNS, true, "Golgorand Execution Site" },
+    { 64, F_MAP__MAP064_GNS, true, "In Front of Bethla Garrison's Sluice" },
+    { 65, F_MAP__MAP065_GNS, true, "Granary of Bethla Garrison" },
+    { 66, F_MAP__MAP066_GNS, true, "South Wall of Bethla Garrison" },
+    { 67, F_MAP__MAP067_GNS, true, "North Wall of Bethla Garrison" },
+    { 68, F_MAP__MAP068_GNS, true, "Bethla Garrison" },
+    { 69, F_MAP__MAP069_GNS, true, "Murond Death City" },
+    { 70, F_MAP__MAP070_GNS, true, "Nelveska Temple" },
+    { 71, F_MAP__MAP071_GNS, true, "Dolbodar Swamp" },
+    { 72, F_MAP__MAP072_GNS, true, "Fovoham Plains" },
+    { 73, F_MAP__MAP073_GNS, true, "Inside of Windmill Shed" },
+    { 74, F_MAP__MAP074_GNS, true, "Sweegy Woods" },
+    { 75, F_MAP__MAP075_GNS, true, "Bervenia Volcano" },
+    { 76, F_MAP__MAP076_GNS, true, "Zeklaus Desert" },
+    { 77, F_MAP__MAP077_GNS, true, "Lenalia Plateau" },
+    { 78, F_MAP__MAP078_GNS, true, "Zigolis Swamp" },
+    { 79, F_MAP__MAP079_GNS, true, "Yuguo Woods" },
+    { 80, F_MAP__MAP080_GNS, true, "Araguay Woods" },
+    { 81, F_MAP__MAP081_GNS, true, "Grog Hill" },
+    { 82, F_MAP__MAP082_GNS, true, "Bed Desert" },
+    { 83, F_MAP__MAP083_GNS, true, "Zirekile Falls" },
+    { 84, F_MAP__MAP084_GNS, true, "Bariaus Hill" },
+    { 85, F_MAP__MAP085_GNS, true, "Mandalia Plains" },
+    { 86, F_MAP__MAP086_GNS, true, "Doguola Pass" },
+    { 87, F_MAP__MAP087_GNS, true, "Bariaus Valley" },
+    { 88, F_MAP__MAP088_GNS, true, "Finath River" },
+    { 89, F_MAP__MAP089_GNS, true, "Poeskas Lake" },
+    { 90, F_MAP__MAP090_GNS, true, "Germinas Peak" },
+    { 91, F_MAP__MAP091_GNS, true, "Thieves Fort" },
+    { 92, F_MAP__MAP092_GNS, true, "Igros-Belouve Residence" },
+    { 93, F_MAP__MAP093_GNS, true, "Broke Down Shed-Wooden Building" },
+    { 94, F_MAP__MAP094_GNS, true, "Broke Down Shed-Stone Building" },
+    { 95, F_MAP__MAP095_GNS, true, "Church" },
+    { 96, F_MAP__MAP096_GNS, true, "Pub" },
+    { 97, F_MAP__MAP097_GNS, true, "Inside Castle Gate in Lesalia" },
+    { 98, F_MAP__MAP098_GNS, true, "Outside Castle Gate in Lesalia" },
+    { 99, F_MAP__MAP099_GNS, true, "Main Street of Lesalia" },
+    { 100, F_MAP__MAP100_GNS, true, "Public Cemetery" },
+    { 101, F_MAP__MAP101_GNS, true, "Tutorial (1)" },
+    { 102, F_MAP__MAP102_GNS, true, "Tutorial (2)" },
+    { 103, F_MAP__MAP103_GNS, true, "Windmill Shed" },
+    { 104, F_MAP__MAP104_GNS, true, "Belouve Residence" },
+    { 105, F_MAP__MAP105_GNS, true, "TERMINATE" },
+    { 106, F_MAP__MAP106_GNS, true, "DELTA" },
+    { 107, F_MAP__MAP107_GNS, true, "NOGIAS" },
+    { 108, F_MAP__MAP108_GNS, true, "VOYAGE" },
+    { 109, F_MAP__MAP109_GNS, true, "BRIDGE" },
+    { 110, F_MAP__MAP110_GNS, true, "VALKYRIES" },
+    { 111, F_MAP__MAP111_GNS, true, "MLAPAN" },
+    { 112, F_MAP__MAP112_GNS, true, "TIGER" },
+    { 113, F_MAP__MAP113_GNS, true, "HORROR" },
+    { 114, F_MAP__MAP114_GNS, true, "END" },
+    { 115, F_MAP__MAP115_GNS, true, "Banished Fort" },
+    { 116, F_MAP__MAP116_GNS, true, "Arena" },
+    { 117, F_MAP__MAP117_GNS, true, "Unknown" },
+    { 118, F_MAP__MAP118_GNS, true, "Unknown" },
+    { 119, F_MAP__MAP119_GNS, true, "Unknown" },
+    { 120, 0, false, "???" },
+    { 121, 0, false, "???" },
+    { 122, 0, false, "???" },
+    { 123, 0, false, "???" },
+    { 124, 0, false, "???" },
+    { 125, F_MAP__MAP125_GNS, true, "Unknown" },
+    { 126, 0, false, "???" },
+    { 127, 0, false, "???" },
+};
+
 #ifdef __cplusplus
 }
 #endif
@@ -1696,8 +1877,8 @@ static fft_record_t fft_record_read(fft_span_t* span) {
     return record;
 }
 
-static uint32_t fft_record_read_all(fft_span_t* span, fft_record_t* out_records) {
-    uint32_t count = 0;
+static uint8_t fft_record_read_all(fft_span_t* span, fft_record_t* out_records) {
+    uint8_t count = 0;
     while (span->offset + FFT_RECORD_SIZE < span->size) {
         fft_record_t record = fft_record_read(span);
         if (record.type == FFT_RECORDTYPE_END) {
@@ -2427,6 +2608,88 @@ static fft_texture_t fft_texture_read(fft_span_t* span, fft_state_t state) {
 }
 
 /*
+================================================================================
+Map Data Implementation
+================================================================================
+*/
+
+fft_map_data_t* fft_map_data_read(int map_id) {
+    fft_map_data_t* map_data = FFT_MEM_ALLOC(sizeof(fft_map_data_t));
+
+    const fft_io_entry_e map_file = fft_map_list[map_id].entry;
+
+    fft_span_t gns = fft_io_open(map_file);
+    {
+        map_data->record_count = fft_record_read_all(&gns, map_data->records);
+    }
+    fft_io_close(gns);
+
+    for (uint32_t i = 0; i < map_data->record_count; i++) {
+        fft_record_t* record = &map_data->records[i];
+
+        // Fetch the resource file
+
+        switch (record->type) {
+        case FFT_RECORDTYPE_TEXTURE: {
+            fft_span_t file = fft_io_read(record->sector, record->length);
+            fft_texture_t texture = fft_texture_read(&file, record->state);
+            fft_io_close(file);
+
+            map_data->textures[map_data->texture_count++] = texture;
+            break;
+        }
+        case FFT_RECORDTYPE_MESH_PRIMARY: {
+            fft_span_t file = fft_io_read(record->sector, record->length);
+            // There always only one primary mesh file and it uses default state.
+            FFT_ASSERT(fft_state_is_default(record->state), "Primary mesh file has non-default state");
+            map_data->primary_mesh = fft_mesh_read(&file);
+            fft_io_close(file);
+
+            record->meta = map_data->primary_mesh.meta;
+            break;
+        }
+        case FFT_RECORDTYPE_MESH_ALT: {
+            fft_span_t file = fft_io_read(record->sector, record->length);
+            fft_mesh_t alt_mesh = fft_mesh_read(&file);
+            fft_io_close(file);
+
+            alt_mesh.state = record->state;
+            map_data->alt_meshes[map_data->alt_mesh_count++] = alt_mesh;
+            record->meta = map_data->primary_mesh.meta;
+            break;
+        }
+        case FFT_RECORDTYPE_MESH_OVERRIDE: {
+            fft_span_t file = fft_io_read(record->sector, record->length);
+            // If there is an override file, there is only one and it uses default state.
+            FFT_ASSERT(fft_state_is_default(record->state), "Override must be default map state");
+            map_data->override_mesh = fft_mesh_read(&file);
+            fft_io_close(file);
+
+            record->meta = map_data->primary_mesh.meta;
+            break;
+        }
+
+        default:
+            continue;
+        }
+    }
+
+    return map_data;
+}
+
+void fft_map_data_destroy(fft_map_data_t* map) {
+    if (map == NULL) {
+        return;
+    }
+
+    // Textures
+    for (uint32_t i = 0; i < map->texture_count; i++) {
+        fft_texture_destroy(map->textures[i]);
+    }
+
+    FFT_MEM_FREE(map);
+}
+
 /*
 ================================================================================
 Entrypoint Implementation
