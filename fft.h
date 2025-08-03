@@ -722,11 +722,11 @@ typedef struct {
     uint32_t length;
 
     // Padding or unknown fields
-    uint16_t aa;
-    uint16_t ee;
-    uint16_t gg;
-    uint16_t ii;
-    uint16_t jj;
+    uint16_t unknown_aa;
+    uint16_t unknown_ee;
+    uint16_t unknown_gg;
+    uint16_t unknown_ii;
+    uint16_t unknown_jj;
 
     uint8_t raw[FFT_RECORD_SIZE]; // Raw data for debugging
 
@@ -1852,18 +1852,20 @@ GNS/Records Implementation
 */
 
 static fft_record_t fft_record_read(fft_span_t* span) {
-    uint16_t aa = fft_span_read_u16(span);             // 0
+    uint16_t unknown_aa = fft_span_read_u16(span);     // 0
     uint8_t layout = fft_span_read_u8(span);           // 1-2
     uint8_t time_and_weather = fft_span_read_u8(span); // 3
     fft_recordtype_e type = fft_span_read_u16(span);   // 4-5
-    uint16_t ee = fft_span_read_u16(span);             // 6-7
+    uint16_t unknown_ee = fft_span_read_u16(span);     // 6-7
     uint32_t sector = fft_span_read_u16(span);         // 8-9
-    uint16_t gg = fft_span_read_u16(span);             // 10-11
+    uint16_t unknown_gg = fft_span_read_u16(span);     // 10-11
     uint32_t length = fft_span_read_u32(span);         // 12-15
-    uint16_t ii = fft_span_read_u16(span);             // 16-17
-    uint16_t jj = fft_span_read_u16(span);             // 18-19
+    uint16_t unknown_ii = fft_span_read_u16(span);     // 16-17
+    uint16_t unknown_jj = fft_span_read_u16(span);     // 18-19
 
     // Split time and weather from single byte.
+    // - time    = 0b10000000
+    // - weather = 0b01110000
     fft_time_e time = (fft_time_e)((time_and_weather >> 7) & 0x1);
     fft_weather_e weather = (fft_weather_e)((time_and_weather >> 4) & 0x7);
 
@@ -1876,11 +1878,11 @@ static fft_record_t fft_record_read(fft_span_t* span) {
             .weather = weather,
             .layout = layout,
         },
-        .aa = aa,
-        .ee = ee,
-        .gg = gg,
-        .ii = ii,
-        .jj = jj,
+        .unknown_aa = unknown_aa,
+        .unknown_ee = unknown_ee,
+        .unknown_gg = unknown_gg,
+        .unknown_ii = unknown_ii,
+        .unknown_jj = unknown_jj,
     };
 
     // Rollback to the start of the record for raw data.
