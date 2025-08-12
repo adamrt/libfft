@@ -11,8 +11,8 @@ Copyright (c) 2025 Adam Patterson
 
 For the latest version: - https://github.com/adamrt/libfft
 
-❤️ Thank you to the FFHacktics community and their wiki. This library would not
-be possible without their amazing work (https://ffhacktics.com/wiki/).
+❤️ This project is an ode to FFHacktics. This library would not be possible
+without their amazing work (https://ffhacktics.com/wiki/).
 
 ================================================================================
            ___       ___  ________  ________ ________ _________
