@@ -136,6 +136,9 @@ Fixed Point Types
 // Fixed-point types for FFT
 typedef int16_t fft_fixed16_t;
 
+// The value of 1.0 in fixed-point format.
+static const float FFT_FIXED16_ONE = 4096.0f;
+
 /*
 ================================================================================
 Span
@@ -737,37 +740,90 @@ typedef struct {
 ================================================================================
 Colors
 ================================================================================
+
+There a multiple different color types in the game data. This was done to strike
+a balance between precision and memory usage.
+
+There are these types in the game data:
+- 4BPP (4-bit per pixel)
+- 5551 (RGB555 + 1-bit alpha)
+- FX16 (16-bit per channel fixed-point RGB)
+- RGB8 (8-bit per channel RGB)
+
+This one was added by us to have a consistent type to export to:
+- RGBA8 (packed 32-bit RGBA)
+
+================================================================================
 */
 
-// 16-bit BGR555 + 1-bit alpha format
-// ABBBBBGGGGGRRRRR
-typedef struct {
-    uint16_t r : 5; // Red   (0–31)
-    uint16_t g : 5; // Green (0–31)
-    uint16_t b : 5; // Blue  (0–31)
-    uint16_t a : 1; // Alpha (0 = transparent, 1 = opaque)
-} fft_color_5551_t;
+// === fft_color_4bpp_t
+//
+// This is a 4-bit per pixel. It is commonly used for map textures and sprite
+// sheets. This allow 16 values per pixel. Then the CLUT (Color Look-Up Table)
+// have 16 colors that can be indexed by the pixel values.
+typedef uint8_t fft_color_4bpp_t; // two 4-bit pixels
 
-// 48-bit RGB fixed-point format. This color is use for lighting colors and
-// possibly other places that require higher precision colors.
+fft_color_4bpp_t fft_color_4bpp_read(fft_span_t* span);
+
+uint8_t fft_color_4bpp_left(fft_color_4bpp_t px);
+uint8_t fft_color_4bpp_right(fft_color_4bpp_t px);
+
+// === fft_color_5551_t
+//
+// This is a 16-bit BGR555 + 1-bit alpha format. They are used for CLUTs (Color
+// Look-Up Table), which are palettes for map textures and sprites.
+typedef uint16_t fft_color_5551_t; // ABBBBBGGGGGRRRRR
+
+fft_color_5551_t fft_color_5551_read(fft_span_t* span);
+
+// These all scale the 5-bit values to 8-bit values (0-31 -> 0-255).
+uint8_t fft_color_5551_r8(fft_color_5551_t c);
+uint8_t fft_color_5551_g8(fft_color_5551_t c);
+uint8_t fft_color_5551_b8(fft_color_5551_t c);
+uint8_t fft_color_5551_a8(fft_color_5551_t c);
+
+bool fft_color_5551_is_transparent(fft_color_5551_t color);
+
+// === fft_color_rgb16_t
+//
+// This is a 48-bit RGB fixed-point format. This color is used for
+// lighting colors and possibly other places that require higher precision colors.
 typedef struct {
     fft_fixed16_t r;
     fft_fixed16_t g;
     fft_fixed16_t b;
-} fft_color_rgb16_t;
+} fft_color_rgbfx16_t;
 
-// 24-bit RGB888 format. This color is used for ambient light, at least.
+fft_color_rgbfx16_t fft_color_rgbfx16_read(fft_span_t* span);
+float fft_color_rgb16_r8(fft_color_rgbfx16_t c);
+float fft_color_rgb16_g8(fft_color_rgbfx16_t c);
+float fft_color_rgb16_b8(fft_color_rgbfx16_t c);
+
+// === fft_color_rgb8_t
+//
+// This is a 24-bit RGB888 format. This color is used for backgrounds, ambient
+// light, and possibly other places that require standard colors.
 typedef struct {
-    uint8_t r; // Red   (0–255)
-    uint8_t g; // Green (0–255)
-    uint8_t b; // Blue  (0–255)
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
 } fft_color_rgb8_t;
 
-fft_color_5551_t fft_color_5551_read(fft_span_t* span);
-fft_color_rgb16_t fft_color_rgb16_read(fft_span_t* span);
 fft_color_rgb8_t fft_color_rgb8_read(fft_span_t* span);
 
-bool fft_color_5551_is_transparent(fft_color_5551_t color);
+// === fft_color_t
+//
+// This is a 32-bit RGBA8888 packed format. Each component is scaled to 0-255.
+// This is not used in the game data, but we have it to represent colors in a
+// standard way for rendering and processing.
+typedef uint32_t fft_color_t; // RGBA8888 packed
+
+fft_color_t fft_color_from_5551(fft_color_5551_t c);
+fft_color_t fft_color_from_rgbfx16(fft_color_rgbfx16_t c);
+fft_color_t fft_color_from_rgb8(fft_color_rgb8_t c);
+
+#define FFT_COLOR_RGBA(r, g, b, a) \
+    ((((uint32_t)(a) & 0xFF) << 24) | (((uint32_t)(b) & 0xFF) << 16) | (((uint32_t)(g) & 0xFF) << 8) | (((uint32_t)(r) & 0xFF) << 0))
 
 /*
 ================================================================================
@@ -816,9 +872,9 @@ enum {
 
 typedef enum {
     FFT_IMAGETYPE_4BPP,
-    FFT_IMAGETYPE_4BPP_PAL,
-    FFT_IMAGETYPE_8BPP,
-    FFT_IMAGETYPE_16BPP,
+    FFT_IMAGETYPE_5551,
+    FFT_IMAGETYPE_RGB8,
+    FFT_IMAGETYPE_FX16,
 } fft_image_type_e;
 
 typedef struct {
@@ -851,19 +907,19 @@ typedef struct {
 
 // clang-format off
 const fft_image_desc_t image_desc_list[FFT_IMAGE_DESC_COUNT] = {
-    { .name = "BONUS.BIN",    .entry = F_EVENT__BONUS_BIN,    .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 200, .pal_offset = 25600, .pal_count = 6,  .repeat = 36,  .repeat_offset = 26624 },
-    { .name = "CHAPTER1.BIN", .entry = F_EVENT__CHAPTER1_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
-    { .name = "CHAPTER2.BIN", .entry = F_EVENT__CHAPTER2_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
-    { .name = "CHAPTER3.BIN", .entry = F_EVENT__CHAPTER3_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
-    { .name = "CHAPTER4.BIN", .entry = F_EVENT__CHAPTER4_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
-    { .name = "EVTCHR.BIN",   .entry = F_EVENT__EVTCHR_BIN,   .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 200, .pal_offset = 1920,  .pal_count = 7,  .repeat = 137, .repeat_offset = 30720, .data_offset = 2560 },
-    { .name = "FRAME.BIN",    .entry = F_EVENT__FRAME_BIN,    .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 288, .pal_offset = 36864, .pal_count = 22, .pal_default = 5 },
-    { .name = "ITEM.BIN",     .entry = F_EVENT__ITEM_BIN,     .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 256, .pal_offset = 32768, .pal_count = 16 },
-    { .name = "UNIT.BIN",     .entry = F_EVENT__UNIT_BIN,     .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 480, .pal_offset = 61440, .pal_count = 128 },
-    { .name = "WLDFACE.BIN",  .entry = F_EVENT__WLDFACE_BIN,  .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 240, .pal_offset = 30720, .pal_count = 64, .repeat = 4,   .repeat_offset = 32768 },
-    { .name = "WLDFACE4.BIN", .entry = F_EVENT__WLDFACE4_BIN, .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 240, .pal_offset = 30720, .pal_count = 64 },
+    { .name = "BONUS.BIN",    .entry = F_EVENT__BONUS_BIN,    .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 200, .pal_offset = 25600, .pal_count = 6,  .repeat = 36,  .repeat_offset = 26624 },
+    { .name = "CHAPTER1.BIN", .entry = F_EVENT__CHAPTER1_BIN, .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
+    { .name = "CHAPTER2.BIN", .entry = F_EVENT__CHAPTER2_BIN, .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
+    { .name = "CHAPTER3.BIN", .entry = F_EVENT__CHAPTER3_BIN, .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
+    { .name = "CHAPTER4.BIN", .entry = F_EVENT__CHAPTER4_BIN, .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 62,  .pal_offset = 8160,  .pal_count = 1 },
+    { .name = "EVTCHR.BIN",   .entry = F_EVENT__EVTCHR_BIN,   .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 200, .pal_offset = 1920,  .pal_count = 7,  .repeat = 137, .repeat_offset = 30720, .data_offset = 2560 },
+    { .name = "FRAME.BIN",    .entry = F_EVENT__FRAME_BIN,    .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 288, .pal_offset = 36864, .pal_count = 22, .pal_default = 5 },
+    { .name = "ITEM.BIN",     .entry = F_EVENT__ITEM_BIN,     .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 256, .pal_offset = 32768, .pal_count = 16 },
+    { .name = "UNIT.BIN",     .entry = F_EVENT__UNIT_BIN,     .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 480, .pal_offset = 61440, .pal_count = 128 },
+    { .name = "WLDFACE.BIN",  .entry = F_EVENT__WLDFACE_BIN,  .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 240, .pal_offset = 30720, .pal_count = 64, .repeat = 4,   .repeat_offset = 32768 },
+    { .name = "WLDFACE4.BIN", .entry = F_EVENT__WLDFACE4_BIN, .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 240, .pal_offset = 30720, .pal_count = 64 },
 
-    { .name = "OTHER.SPR",    .entry = F_BATTLE__OTHER_SPR,   .type = FFT_IMAGETYPE_4BPP_PAL, .width = 256, .height = 256, .pal_offset = 0,     .pal_count = 32, .data_offset = 1024 },
+    { .name = "OTHER.SPR",    .entry = F_BATTLE__OTHER_SPR,   .type = FFT_IMAGETYPE_4BPP, .width = 256, .height = 256, .pal_offset = 0,     .pal_count = 32, .data_offset = 1024 },
 };
 // clang-format on
 
@@ -948,7 +1004,7 @@ The untextured polygons should be shown as black and are often the map sides.
 
 The Geometry section of the mesh has 6 parts
 
-* Header
+=== Header
 
 The header contains 4x u16 with the number of each type of polyon.
 
@@ -961,8 +1017,7 @@ The header contains 4x u16 with the number of each type of polyon.
 | Untextured quads | 256 |
 +------------------+-----+
 
-
-* Position
+=== Position
 
   The position data is stored as int16_t for X, Y and Z. The coordinates system
   is like so:
@@ -971,14 +1026,14 @@ The header contains 4x u16 with the number of each type of polyon.
     - Y+ = down // This is non-standard for modern 3D engines, but is how FFT works.
     - Z+ = forward
 
-* Normals
+=== Normals
 
   The normal data is stored as fft_fixed16_t. The float version of this can be
   derived by casting and dividing it by 4096.0f. The original data is in a
   1.3.12 fixed format where 4096 == 1.0.The normals are used for lighting
   calculations.
 
-* Textured Info
+=== Textured Info
 
   This information contains the texture coordinates, clut, page, and some
   unknown fields. The page is a relic of the PS1 hardware. Texture sizes were
@@ -988,12 +1043,12 @@ The header contains 4x u16 with the number of each type of polyon.
 
     - texcoord.u = (texcoord.u + (256 * page));
 
-* UnTextured Info
+=== UnTextured Info
 
   This information is for untextured polygons. It contains 4 bytes per polygon.
   We don't know the purpose of this data.
 
-* Tile Info
+=== Tile Info
 
   The tile info contains x/z coordinate indexes into the terrain map. The
   elevation is either 0 or 1, depending on when there is two levels of terrain
@@ -1102,7 +1157,7 @@ enum {
 };
 
 typedef struct {
-    fft_color_rgb16_t color;
+    fft_color_rgbfx16_t color;
     fft_position_t position;
 } fft_light_t;
 
@@ -1929,18 +1984,32 @@ const char* fft_recordtype_str(fft_recordtype_e value) {
 Colors Implementation
 ================================================================================
 */
+
+uint8_t fft_color_4bpp_left(fft_color_4bpp_t px) { return px & 0x0F; }
+uint8_t fft_color_4bpp_right(fft_color_4bpp_t px) { return (px >> 4) & 0x0F; }
+
+uint8_t fft_color_5551_r8(fft_color_5551_t c) { return (uint8_t)(((c & 0x1F) << 3) | ((c & 0x1F) >> 2)); }
+uint8_t fft_color_5551_g8(fft_color_5551_t c) { return (uint8_t)((((c >> 5) & 0x1F) << 3) | (((c >> 5) & 0x1F) >> 2)); }
+uint8_t fft_color_5551_b8(fft_color_5551_t c) { return (uint8_t)((((c >> 10) & 0x1F) << 3) | (((c >> 10) & 0x1F) >> 2)); }
+uint8_t fft_color_5551_a8(fft_color_5551_t c) { return (uint8_t)(((c >> 15) & 0x01) ? 255 : 0); }
+
+fft_color_4bpp_t fft_color_4bpp_read(fft_span_t* span) {
+    uint8_t value = fft_span_read_u8(span);
+    return (fft_color_4bpp_t)value;
+}
+
 fft_color_5551_t fft_color_5551_read(fft_span_t* span) {
-    uint16_t raw = fft_span_read_u16(span);
-    fft_color_5551_t color = { 0 };
-    color.a = (raw >> 15) & 0x1;  // A 1-bit
-    color.b = (raw >> 10) & 0x1F; // B 5-bits
-    color.g = (raw >> 5) & 0x1F;  // G 5-bits
-    color.r = (raw >> 0) & 0x1F;  // R 5-bits
+    fft_color_5551_t color = 0;
+    uint16_t value = fft_span_read_u16(span);
+    color |= (value & 0x1F);               // Red
+    color |= ((value >> 5) & 0x1F) << 5;   // Green
+    color |= ((value >> 10) & 0x1F) << 10; // Blue
+    color |= ((value >> 15) & 0x01) << 15; // Alpha
     return color;
 }
 
-fft_color_rgb16_t fft_color_rgb16_read(fft_span_t* span) {
-    fft_color_rgb16_t color = { 0 };
+fft_color_rgbfx16_t fft_color_rgbfx16_read(fft_span_t* span) {
+    fft_color_rgbfx16_t color = { 0 };
     color.r = fft_span_read_i16(span); // 16 bits for red
     color.g = fft_span_read_i16(span); // 16 bits for green
     color.b = fft_span_read_i16(span); // 16 bits for blue
@@ -1956,7 +2025,32 @@ fft_color_rgb8_t fft_color_rgb8_read(fft_span_t* span) {
 }
 
 bool fft_color_5551_is_transparent(fft_color_5551_t color) {
-    return (color.r + color.g + color.b + color.a) == 0;
+    uint8_t r = fft_color_5551_r8(color);
+    uint8_t g = fft_color_5551_g8(color);
+    uint8_t b = fft_color_5551_b8(color);
+    uint8_t a = fft_color_5551_a8(color);
+    return (r + g + b + a) == 0;
+}
+
+fft_color_t fft_color_from_5551(fft_color_5551_t c) {
+    uint8_t r = (uint8_t)(((c) & 0x1F) << 3) | (((c) & 0x1F) >> 2);
+    uint8_t g = (uint8_t)(((c >> 5) & 0x1F) << 3) | (((c >> 5) & 0x1F) >> 2);
+    uint8_t b = (uint8_t)(((c >> 10) & 0x1F) << 3) | (((c >> 10) & 0x1F) >> 2);
+    uint8_t a = (c >> 15) ? 255 : 0;
+    return FFT_COLOR_RGBA(r, g, b, a);
+}
+
+// Convert RGB16 fixed-point to RGBA8888 (full 255 range)
+fft_color_t fft_color_from_rgbfx16(fft_color_rgbfx16_t c) {
+    uint8_t r = (uint8_t)((((float)c.r / FFT_FIXED16_ONE) * 255.0f) + 0.5f);
+    uint8_t g = (uint8_t)((((float)c.g / FFT_FIXED16_ONE) * 255.0f) + 0.5f);
+    uint8_t b = (uint8_t)((((float)c.b / FFT_FIXED16_ONE) * 255.0f) + 0.5f);
+    return FFT_COLOR_RGBA(r, g, b, 255);
+}
+
+// Convert RGB8 to RGBA8888
+fft_color_t fft_color_from_rgb8(fft_color_rgb8_t c) {
+    return FFT_COLOR_RGBA(c.r, c.g, c.b, 255);
 }
 
 /*
