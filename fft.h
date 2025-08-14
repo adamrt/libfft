@@ -1995,8 +1995,8 @@ Colors Implementation
 ================================================================================
 */
 
-uint8_t fft_color_4bpp_left(fft_color_4bpp_t px) { return px & 0x0F; }
-uint8_t fft_color_4bpp_right(fft_color_4bpp_t px) { return (px >> 4) & 0x0F; }
+uint8_t fft_color_4bpp_left(fft_color_4bpp_t raw) { return (raw & 0xF0) >> 4; }
+uint8_t fft_color_4bpp_right(fft_color_4bpp_t raw) { return raw & 0x0F; }
 
 uint8_t fft_color_5551_r8(fft_color_5551_t c) { return (uint8_t)(((c & 0x1F) << 3) | ((c & 0x1F) >> 2)); }
 uint8_t fft_color_5551_g8(fft_color_5551_t c) { return (uint8_t)((((c >> 5) & 0x1F) << 3) | (((c >> 5) & 0x1F) >> 2)); }
@@ -2114,10 +2114,9 @@ static fft_image_t fft_image_read_4bpp(fft_span_t* span, uint32_t width, uint32_
 
     uint32_t write_idx = 0;
     for (uint32_t i = 0; i < size_on_disk; i++) {
-        uint8_t raw_pixel = fft_span_read_u8(span);
-
-        uint8_t right = (raw_pixel & 0x0F);
-        uint8_t left = (raw_pixel & 0xF0) >> 4;
+        fft_color_4bpp_t raw_pixel = fft_color_4bpp_read(span);
+        uint8_t right = fft_color_4bpp_right(raw_pixel);
+        uint8_t left = fft_color_4bpp_left(raw_pixel);
 
         // Repeat each pixel 4 times to convert from 4bpp to 32bpp.
         for (uint32_t j = 0; j < 4; j++) {
