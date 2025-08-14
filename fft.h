@@ -86,31 +86,29 @@ intended use in the game. We store that data in its original format but provide
 helper functions and macros to convert to commonly desired types.
 
 One exception where we don't stick to the original types is when there are
-multiple values in a single byte. We typically split these into separate fields
-for ease of use. For example:
+multiple values in a single byte. We typically split these into separate fields.
+This makes accessing fields easier at the expense of a little more memory.
+
+For example:
 
     Polygon Tile Locations:
-    +------+------+---------+
-    | Bits | Type | Purpose |
-    |------+------+---------+
-    | 7    | uint | Z coord |
-    | 1    | N/A  | Height  |
-    | 8    | uint | X coord |
-    +------+------+---------+
+    +------+------+-----------+
+    | Bits | Type | Purpose   |
+    |------+------+-----------+
+    | 7    | uint | Z coord   |
+    | 1    | N/A  | Elevation |
+    | 8    | uint | X coord   |
+    +------+------+-----------+
 
-Our data structure would be something that split the values from the first
-byte into two separate fields:
+Our data structure splits the values from the first byte into two separate fields:
 
     ```c
     typedef struct {
         u8 x;
         u8 z;
-        u8 height;
-    } polygon_tile_location_t;
+        u8 elevation;
+    } fft_tileinfo_t;
     ```
-
-  This makes accessing fields a little easier. Making it more readable at the
-  expense of a little space.
 
 ================================================================================
 
@@ -138,6 +136,8 @@ typedef int16_t fft_fixed16_t;
 
 // The value of 1.0 in fixed-point format.
 static const float FFT_FIXED16_ONE = 4096.0f;
+
+float fft_fixed16_to_f32(fft_fixed16_t value);
 
 /*
 ================================================================================
@@ -1628,6 +1628,16 @@ Defines
 
 /*
 ================================================================================
+Fixed-Point Implementation
+================================================================================
+*/
+
+float fft_fixed16_to_f32(fft_fixed16_t value) {
+    return (float)value / FFT_FIXED16_ONE;
+}
+
+/*
+================================================================================
 Span Implementation
 ================================================================================
 */
@@ -2042,9 +2052,13 @@ fft_color_t fft_color_from_5551(fft_color_5551_t c) {
 
 // Convert RGB16 fixed-point to RGBA8888 (full 255 range)
 fft_color_t fft_color_from_rgbfx16(fft_color_rgbfx16_t c) {
-    uint8_t r = (uint8_t)((((float)c.r / FFT_FIXED16_ONE) * 255.0f) + 0.5f);
-    uint8_t g = (uint8_t)((((float)c.g / FFT_FIXED16_ONE) * 255.0f) + 0.5f);
-    uint8_t b = (uint8_t)((((float)c.b / FFT_FIXED16_ONE) * 255.0f) + 0.5f);
+    float r32 = fft_fixed16_to_f32(c.r);
+    float g32 = fft_fixed16_to_f32(c.g);
+    float b32 = fft_fixed16_to_f32(c.b);
+
+    uint8_t r = (uint8_t)(r32 * 255.0f + 0.5f);
+    uint8_t g = (uint8_t)(g32 * 255.0f + 0.5f);
+    uint8_t b = (uint8_t)(b32 * 255.0f + 0.5f);
     return FFT_COLOR_RGBA(r, g, b, 255);
 }
 
