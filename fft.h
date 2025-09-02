@@ -2177,11 +2177,21 @@ static fft_image_t fft_image_read_16bpp(fft_span_t* span, uint32_t width, uint32
 // Take a 4bpp image and a 16bpp palette (CLUT) and convert the image to a
 // palettized format.
 static void fft_image_palettize(fft_image_t* image, const fft_image_t* clut, uint8_t pal_index) {
+    FFT_ASSERT(image && image->data && image->valid, "Invalid image parameter");
+    FFT_ASSERT(clut && clut->data && clut->valid, "Invalid clut parameter");
+
     const uint32_t pixel_count = image->width * image->height;
     const uint32_t pal_offset = (FFT_IMAGE_PAL_ROW_SIZE * pal_index);
 
+    // Ensure palette index and offset are valid
+    FFT_ASSERT(pal_offset + (FFT_IMAGE_PAL_COL_COUNT * 4) <= clut->size, "Palette index out of bounds");
+
     for (uint32_t i = 0; i < pixel_count * 4; i = i + 4) {
         uint8_t pixel = image->data[i];
+
+        // Ensure pixel value is within palette range
+        FFT_ASSERT(pixel < FFT_IMAGE_PAL_COL_COUNT, "Pixel value %d exceeds palette size", pixel);
+
         memcpy(&image->data[i], &clut->data[pal_offset + (pixel * 4)], 4);
     }
 }
@@ -2219,9 +2229,7 @@ static fft_image_desc_t image_get_desc(fft_io_entry_e entry) {
 // value by 16. This is useful for debugging since the max value of 4bpp is 15,
 // and we want to scale it to 255 (15*17 = 255).
 static void fft_image_scale_paletted(fft_image_t* image) {
-    if (!image || !image->valid || !image->data) {
-        return;
-    }
+    FFT_ASSERT(image && image->valid && image->data, "Invalid image parameter");
 
     const uint32_t pixel_count = image->width * image->height;
 
