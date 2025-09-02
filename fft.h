@@ -2338,7 +2338,7 @@ static fft_normal_t fft_geometry_read_normal(fft_span_t* span) {
 
 static uint32_t read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, bool is_textured, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
-        polygon_t* poly = &g->polygons[poly_offset + count];
+        polygon_t* poly = &g->polygons[poly_offset + i];
         poly->tex.is_textured = is_textured;
         poly->type = type;
 
