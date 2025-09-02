@@ -3,11 +3,12 @@
 
 
 /*
+SPDX-License-Identifier: BSD-2-Clause
+Copyright (c) 2025 Adam Patterson
+
 ================================================================================
 libFFT - A Final Fantasy Tactics Library
 ================================================================================
-SPDX-License-Identifier: BSD-2-Clause
-Copyright (c) 2025 Adam Patterson
 
 For the latest version: - https://github.com/adamrt/libfft
 
@@ -37,8 +38,8 @@ PURPOSE
 
 USAGE
     To use this library, you need to include the header file in your project and
-    in a single translation unit (C file), define `FFT_IMPLEMENTATION` before
-    including the header. You can include the file without defining
+    then in a single translation unit (C file), define `FFT_IMPLEMENTATION`
+    before including the header. You can include the file without defining
     `FFT_IMPLEMENTATION` in multiple translation units to use the library.
 
         ```c
@@ -50,7 +51,7 @@ USAGE
         int main() {
             fft_init("my_fft_file.bin");
             fft_do_thing(...);
-            ffft_shutdown();
+            fft_shutdown();
         }
         ```
 WARNINGS
@@ -129,6 +130,14 @@ void fft_shutdown(void);
 ================================================================================
 Fixed Point Types
 ================================================================================
+
+Fixed-point types are used in FFT for various data like vertex normals and some
+colors. This library doesn't use fixed-point math internally, but provides types
+and conversion functions to help users interpret the data correctly. A common
+way to use this data, for instance on vertex normals, is to convert to a f32 and
+divide by the fixed point's 1.0 value, which for fft_fixed16_t is 4096.0f.
+
+================================================================================
 */
 
 // Fixed-point types for FFT
@@ -148,7 +157,8 @@ Span is a structure and set of functions that represents a contiguous block of
 data in memory. A span is used to represent a file or part of a file in the FFT
 BIN filesystem.
 
-The related functions allow simple reading of specific datatypes.
+The related functions allow simple reading of specific datatypes. The functions
+are the defacto way to read data from the FFT BIN filesystem.
 
 Example:
     ```c
@@ -784,7 +794,7 @@ uint8_t fft_color_5551_a8(fft_color_5551_t c);
 
 bool fft_color_5551_is_transparent(fft_color_5551_t color);
 
-// === fft_color_rgb16_t
+// === fft_color_rgbfx16_t
 //
 // This is a 48-bit RGB fixed-point format. This color is used for
 // lighting colors and possibly other places that require higher precision colors.
@@ -795,9 +805,9 @@ typedef struct {
 } fft_color_rgbfx16_t;
 
 fft_color_rgbfx16_t fft_color_rgbfx16_read(fft_span_t* span);
-float fft_color_rgb16_r8(fft_color_rgbfx16_t c);
-float fft_color_rgb16_g8(fft_color_rgbfx16_t c);
-float fft_color_rgb16_b8(fft_color_rgbfx16_t c);
+float fft_color_rgbfx16_r8(fft_color_rgbfx16_t c);
+float fft_color_rgbfx16_g8(fft_color_rgbfx16_t c);
+float fft_color_rgbfx16_b8(fft_color_rgbfx16_t c);
 
 // === fft_color_rgb8_t
 //
@@ -2326,7 +2336,7 @@ static fft_normal_t fft_geometry_read_normal(fft_span_t* span) {
     return (fft_normal_t) { x, y, z };
 }
 
-static uint32_t _read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, bool is_textured, uint32_t poly_offset, uint32_t count) {
+static uint32_t read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, bool is_textured, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
         polygon_t* poly = &g->polygons[poly_offset + count];
         poly->tex.is_textured = is_textured;
@@ -2341,7 +2351,7 @@ static uint32_t _read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype
     return poly_offset + count;
 }
 
-static uint32_t _read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t poly_offset, uint32_t count) {
+static uint32_t read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
         polygon_t* poly = &g->polygons[poly_offset + i];
 
@@ -2354,7 +2364,7 @@ static uint32_t _read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_
     return poly_offset + count;
 }
 
-static uint32_t _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t poly_offset, uint32_t count) {
+static uint32_t read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
         // Read all data
         uint8_t au = fft_span_read_u8(span);                           // 0
@@ -2396,7 +2406,7 @@ static uint32_t _read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_
     return poly_offset + count;
 }
 
-static uint32_t _read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t poly_offset, uint32_t count) {
+static uint32_t read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
         // Read all data
         uint8_t unknown_a = fft_span_read_u8(span); // 0
@@ -2415,7 +2425,7 @@ static uint32_t _read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t po
     return poly_offset + count;
 }
 
-static uint32_t _read_tile_locations(fft_span_t* span, fft_geometry_t* g, uint32_t poly_offset, uint32_t count) {
+static uint32_t read_tile_locations(fft_span_t* span, fft_geometry_t* g, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
         // Read all data
         uint8_t z_and_y = fft_span_read_u8(span); // y is elevation 0 or 1
@@ -2456,30 +2466,30 @@ static fft_geometry_t fft_geometry_read(fft_span_t* span) {
     uint32_t index = 0;
 
     // Polygons
-    index = _read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, index, N);
-    index = _read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, index, P);
-    index = _read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, index, Q);
-    index = _read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, index, R);
+    index = read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, index, N);
+    index = read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, index, P);
+    index = read_polygons(span, &geometry, FFT_POLYTYPE_TRIANGLE, false, index, Q);
+    index = read_polygons(span, &geometry, FFT_POLYTYPE_QUAD, false, index, R);
 
     // Normals
     index = 0; // Reset for textured polygons
-    index = _read_normals(span, &geometry, FFT_POLYTYPE_TRIANGLE, index, N);
-    index = _read_normals(span, &geometry, FFT_POLYTYPE_QUAD, index, P);
+    index = read_normals(span, &geometry, FFT_POLYTYPE_TRIANGLE, index, N);
+    index = read_normals(span, &geometry, FFT_POLYTYPE_QUAD, index, P);
 
     // Texture Coordinates
     index = 0; // Reset for textured polygons
-    index = _read_texinfo(span, &geometry, FFT_POLYTYPE_TRIANGLE, index, N);
-    index = _read_texinfo(span, &geometry, FFT_POLYTYPE_QUAD, index, P);
+    index = read_texinfo(span, &geometry, FFT_POLYTYPE_TRIANGLE, index, N);
+    index = read_texinfo(span, &geometry, FFT_POLYTYPE_QUAD, index, P);
 
     // Unknown Untextured Polygon Data
     index = N + P; // Reset for untextured polygons
-    index = _read_untexinfo(span, &geometry, index, Q);
-    index = _read_untexinfo(span, &geometry, index, R);
+    index = read_untexinfo(span, &geometry, index, Q);
+    index = read_untexinfo(span, &geometry, index, R);
 
     // Tile Locations
     index = 0; // Reset for textured polygons
-    index = _read_tile_locations(span, &geometry, index, N);
-    index = _read_tile_locations(span, &geometry, index, P);
+    index = read_tile_locations(span, &geometry, index, N);
+    index = read_tile_locations(span, &geometry, index, P);
 
     return geometry;
 }
