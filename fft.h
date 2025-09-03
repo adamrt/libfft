@@ -930,6 +930,8 @@ the value is 0, it means that the chunk is not present in the file.
 
 The gaps in the 196 bytes are filled with 0x00 for every mesh file.
 
+Reference: https://ffhacktics.com/wiki/Maps/Mesh#Header
+
 ================================================================================
 */
 
@@ -1063,6 +1065,8 @@ The header contains 4x u16 with the number of each type of polyon.
   elevation is either 0 or 1, depending on when there is two levels of terrain
   (think of bridges that you can walk over and under).
 
+Reference: https://ffhacktics.com/wiki/Maps/Mesh#Primary_mesh
+
 ================================================================================
 */
 
@@ -1158,6 +1162,8 @@ by the engine.
   - fft_light_t is a directional light.
   - fft_lighting_t is the full lighting state for a map.
 
+Reference: https://ffhacktics.com/wiki/Maps/Mesh#Light_colors_and_positions.2C_background_gradient_colors
+
 ================================================================================
 */
 
@@ -1189,6 +1195,10 @@ fft_lighting_t fft_lighting_read(fft_span_t* span);
 Terrain
 ================================================================================
 
+Terrain data defines the walkable areas, surface types, slopes, and movement
+properties for each tile in the map.
+
+Reference: https://ffhacktics.com/wiki/Maps/Mesh#Terrain
 
 ================================================================================
 */
