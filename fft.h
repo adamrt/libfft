@@ -934,6 +934,13 @@ The gaps in the 196 bytes are filled with 0x00 for every mesh file.
 */
 
 enum {
+    FFT_MESH_HEADER_SIZE = 196, // Total size of mesh header in bytes
+};
+
+// These constants document the binary file offsets for each field in the mesh
+// header. They are kept for reference but are not used by the reading code,
+// which reads the header sequentially as a complete 196-byte structure.
+enum {
     FFT_MESH_PTR_GEOMETRY = 0x40,
     FFT_MESH_PTR_CLUT_COLOR = 0x44,
     FFT_MESH_PTR_LIGHT_AND_BACKGROUND = 0x64,
@@ -954,23 +961,31 @@ enum {
 };
 
 typedef struct {
-    uint32_t geometry;
-    uint32_t clut_color;
-    uint32_t lights_and_background;
-    uint32_t terrain;
-    uint32_t texture_anim_inst;
-    uint32_t palette_anim_inst;
-    uint32_t clut_gray;
-    uint32_t mesh_anim_inst;
-    uint32_t anim_mesh_1;
-    uint32_t anim_mesh_2;
-    uint32_t anim_mesh_3;
-    uint32_t anim_mesh_4;
-    uint32_t anim_mesh_5;
-    uint32_t anim_mesh_6;
-    uint32_t anim_mesh_7;
-    uint32_t anim_mesh_8;
-    uint32_t poly_render_props;
+    uint32_t geometry;              // 0x40: Primary Meshes
+    uint32_t clut_color;            // 0x44: Color Texture Palettes
+    uint32_t lights_and_background; // 0x64: Light Colors/Positions
+    uint32_t terrain;               // 0x68: Terrain Data
+    uint32_t texture_anim_inst;     // 0x6C: Texture Animation Instructions
+    uint32_t palette_anim_inst;     // 0x70: Palette Animation Instructions
+    uint32_t clut_gray;             // 0x7C: Grayscale Texture Palettes
+    uint32_t mesh_anim_inst;        // 0x8C: Meshes Animation Instructions
+    uint32_t anim_mesh_1;           // 0x90: Animated Mesh 1
+    uint32_t anim_mesh_2;           // 0x94: Animated Mesh 2
+    uint32_t anim_mesh_3;           // 0x98: Animated Mesh 3
+    uint32_t anim_mesh_4;           // 0x9C: Animated Mesh 4
+    uint32_t anim_mesh_5;           // 0xA0: Animated Mesh 5
+    uint32_t anim_mesh_6;           // 0xA4: Animated Mesh 6
+    uint32_t anim_mesh_7;           // 0xA8: Animated Mesh 7
+    uint32_t anim_mesh_8;           // 0xAC: Animated Mesh 8
+    uint32_t poly_render_props;     // 0xB0: Polygon Render Properties
+
+    uint32_t unknown_48;           // 0x48: unknown pointer
+    uint32_t unknown_4c;           // 0x4C: Unknown pointer (only non-zero in MAP000.5)
+    uint32_t unknown_00_to_40[16]; // 0x00-0x3F: unknown pointers
+    uint32_t unknown_50_to_64[5];  // 0x50-0x63: unknown pointers
+    uint32_t unknown_74_to_7c[2];  // 0x74-0x7B: unknown pointers
+    uint32_t unknown_80_to_8c[3];  // 0x80-0x8B: unknown pointers
+    uint32_t unknown_b4_to_c4[4];  // 0xB4-0xC3: unknown pointers
 } fft_mesh_header_t;
 
 fft_mesh_header_t fft_mesh_header_read(fft_span_t* span);
@@ -2141,40 +2156,43 @@ Mesh Header Implementation
 fft_mesh_header_t fft_mesh_header_read(fft_span_t* span) {
     fft_mesh_header_t header = { 0 };
 
-    fft_span_set_offset(span, 0x40);
-    header.geometry = fft_span_read_u32(span);
-    fft_span_set_offset(span, 0x44);
-    header.clut_color = fft_span_read_u32(span);
-    fft_span_set_offset(span, 0x64);
-    header.lights_and_background = fft_span_read_u32(span); // 0x64 / 96
-    fft_span_set_offset(span, 0x68);
-    header.terrain = fft_span_read_u32(span); // 0x64 / 100
-    fft_span_set_offset(span, 0x6C);
-    header.texture_anim_inst = fft_span_read_u32(span); // 0x68 / 104
-    fft_span_set_offset(span, 0x70);
-    header.palette_anim_inst = fft_span_read_u32(span); // 0x6C / 108
-    fft_span_set_offset(span, 0x7C);
-    header.clut_gray = fft_span_read_u32(span); // 0x78 / 120
-    fft_span_set_offset(span, 0x8C);
-    header.mesh_anim_inst = fft_span_read_u32(span); // 0x88 / 136
-    fft_span_set_offset(span, 0x90);
-    header.anim_mesh_1 = fft_span_read_u32(span); // 0x8C / 140
-    fft_span_set_offset(span, 0x94);
-    header.anim_mesh_2 = fft_span_read_u32(span); // 0x90 / 144
-    fft_span_set_offset(span, 0x98);
-    header.anim_mesh_3 = fft_span_read_u32(span); // 0x94 / 148
-    fft_span_set_offset(span, 0x9C);
-    header.anim_mesh_4 = fft_span_read_u32(span); // 0x98 / 152
-    fft_span_set_offset(span, 0xA0);
-    header.anim_mesh_5 = fft_span_read_u32(span); // 0x9C / 156
-    fft_span_set_offset(span, 0xA4);
-    header.anim_mesh_6 = fft_span_read_u32(span); // 0xA0 / 160
-    fft_span_set_offset(span, 0xA8);
-    header.anim_mesh_7 = fft_span_read_u32(span); // 0xA4 / 164
-    fft_span_set_offset(span, 0xAC);
-    header.anim_mesh_8 = fft_span_read_u32(span); // 0xA8 / 168
-    fft_span_set_offset(span, 0xB0);
-    header.poly_render_props = fft_span_read_u32(span); // 0xAC / 172
+    // 0x00-0x3F: unknown pointers (16 × 4 bytes)
+    fft_span_read_bytes(span, 64, (uint8_t*)header.unknown_00_to_40);
+
+    header.geometry = fft_span_read_u32(span);   // 0x40
+    header.clut_color = fft_span_read_u32(span); // 0x44
+    header.unknown_48 = fft_span_read_u32(span); // 0x48
+    header.unknown_4c = fft_span_read_u32(span); // 0x4C
+
+    // 0x50-0x63: unknown pointers (5 × 4 bytes)
+    fft_span_read_bytes(span, 20, (uint8_t*)header.unknown_50_to_64);
+
+    header.lights_and_background = fft_span_read_u32(span); // 0x64
+    header.terrain = fft_span_read_u32(span);               // 0x68
+    header.texture_anim_inst = fft_span_read_u32(span);     // 0x6C
+    header.palette_anim_inst = fft_span_read_u32(span);     // 0x70
+
+    // 0x74-0x7B: unknown pointers (2 × 4 bytes)
+    fft_span_read_bytes(span, 8, (uint8_t*)header.unknown_74_to_7c);
+
+    header.clut_gray = fft_span_read_u32(span); // 0x7C
+
+    // 0x80-0x8B: unknown pointers (3 × 4 bytes)
+    fft_span_read_bytes(span, 12, (uint8_t*)header.unknown_80_to_8c);
+
+    header.mesh_anim_inst = fft_span_read_u32(span);    // 0x8C
+    header.anim_mesh_1 = fft_span_read_u32(span);       // 0x90
+    header.anim_mesh_2 = fft_span_read_u32(span);       // 0x94
+    header.anim_mesh_3 = fft_span_read_u32(span);       // 0x98
+    header.anim_mesh_4 = fft_span_read_u32(span);       // 0x9C
+    header.anim_mesh_5 = fft_span_read_u32(span);       // 0xA0
+    header.anim_mesh_6 = fft_span_read_u32(span);       // 0xA4
+    header.anim_mesh_7 = fft_span_read_u32(span);       // 0xA8
+    header.anim_mesh_8 = fft_span_read_u32(span);       // 0xAC
+    header.poly_render_props = fft_span_read_u32(span); // 0xB0
+
+    // 0xB4-0xC3: unknown pointers (4 × 4 bytes)
+    fft_span_read_bytes(span, 16, (uint8_t*)header.unknown_b4_to_c4);
 
     return header;
 }
