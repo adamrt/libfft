@@ -1138,10 +1138,10 @@ typedef struct {
     fft_texinfo_t tex;
     fft_untexinfo_t untex;
     fft_tileinfo_t tiles;
-} polygon_t;
+} fft_polygon_t;
 
 typedef struct {
-    polygon_t polygons[FFT_MESH_MAX_POLYGONS];
+    fft_polygon_t polygons[FFT_MESH_MAX_POLYGONS];
 } fft_geometry_t;
 
 static fft_geometry_t fft_geometry_read(fft_span_t* span);
@@ -2229,7 +2229,7 @@ static fft_normal_t fft_geometry_read_normal(fft_span_t* span) {
 
 static uint32_t read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, bool is_textured, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
-        polygon_t* poly = &g->polygons[poly_offset + i];
+        fft_polygon_t* poly = &g->polygons[poly_offset + i];
         poly->tex.is_textured = is_textured;
         poly->type = type;
 
@@ -2244,7 +2244,7 @@ static uint32_t read_polygons(fft_span_t* span, fft_geometry_t* g, fft_polytype_
 
 static uint32_t read_normals(fft_span_t* span, fft_geometry_t* g, fft_polytype_e type, uint32_t poly_offset, uint32_t count) {
     for (uint32_t i = 0; i < count; i++) {
-        polygon_t* poly = &g->polygons[poly_offset + i];
+        fft_polygon_t* poly = &g->polygons[poly_offset + i];
 
         // Read normals
         for (uint32_t j = 0; j < (type == FFT_POLYTYPE_TRIANGLE ? 3 : 4); j++) {
@@ -2275,7 +2275,7 @@ static uint32_t read_texinfo(fft_span_t* span, fft_geometry_t* g, fft_polytype_e
         uint8_t unknown_b = (page_and_image_and_unknown_b >> 4) & 0x0F; // bits 4–7  (0b11110000)
 
         // Populate the polygon's texture info.
-        polygon_t* poly = &g->polygons[poly_offset + i];
+        fft_polygon_t* poly = &g->polygons[poly_offset + i];
         poly->tex.texcoords[0] = (fft_texcoord_t) { .u = au, .v = av };
         poly->tex.texcoords[1] = (fft_texcoord_t) { .u = bu, .v = bv };
         poly->tex.texcoords[2] = (fft_texcoord_t) { .u = cu, .v = cv };
@@ -2306,7 +2306,7 @@ static uint32_t read_untexinfo(fft_span_t* span, fft_geometry_t* g, uint32_t pol
         uint8_t unknown_d = fft_span_read_u8(span); // 3
 
         // Populate the polygon's untextured info.
-        polygon_t* poly = &g->polygons[poly_offset + i];
+        fft_polygon_t* poly = &g->polygons[poly_offset + i];
         poly->untex.unknown_a = unknown_a;
         poly->untex.unknown_b = unknown_b;
         poly->untex.unknown_c = unknown_c;
@@ -2327,7 +2327,7 @@ static uint32_t read_tile_locations(fft_span_t* span, fft_geometry_t* g, uint32_
         uint8_t z = (z_and_y >> 1) & 0xFE; // 0b11111110
 
         // Populate the polygon's tile info.
-        polygon_t* poly = &g->polygons[poly_offset + i];
+        fft_polygon_t* poly = &g->polygons[poly_offset + i];
         poly->tiles.x = x;
         poly->tiles.z = z;
         poly->tiles.elevation = y;
