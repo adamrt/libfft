@@ -119,6 +119,7 @@ Our data structure splits the values from the first byte into two separate field
 extern "C" {
 #endif
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -623,6 +624,9 @@ The default state is:
   - Time: FFT_TIME_DAY
   - Weather: FFT_WEATHER_NONE
   - Layout: 0
+
+Reference: https://ffhacktics.com/wiki/Maps/GNS
+
 ================================================================================
 */
 
@@ -637,6 +641,10 @@ typedef enum {
     FFT_WEATHER_NORMAL = 0x2,
     FFT_WEATHER_STRONG = 0x3,
     FFT_WEATHER_VERY_STRONG = 0x4,
+    // These values are not in GNS records but found in some scenarios.
+    // See fft_scenario_t;
+    FFT_WEATHER_UNKNOWN_0x10 = 0x10, // 0b00010000
+    FFT_WEATHER_UNKNOWN_0x20 = 0x20  // 0b00100000
 } fft_weather_e;
 
 // Each record is related to a specific time, weather, and layout.
@@ -687,6 +695,8 @@ Format: AA BC DD EE FF GG HH HH II JJ
 | II   | 2 bytes | 16-17 | unknown                              |
 | JJ   | 2 bytes | 18-19 | unknown                              |
 +------+---------+-------+--------------------------------------+
+
+Reference: https://ffhacktics.com/wiki/Maps/GNS
 
 ================================================================================
 */
@@ -1435,6 +1445,115 @@ fft_map_data_t* fft_map_data_read(int map_id);
 
 extern const fft_map_desc_t fft_map_list[FFT_MAP_DESC_LIST_COUNT];
 
+/*
+================================================================================
+Scenario
+================================================================================
+Scenarios define the map, weather, time of day, and other properties for each
+scenario in the game. They are 24-byte records stored in ATTACK.OUT file. The
+records start at an offset of 0x10938 from the beginning of the file.
+
+FIXME: The value of C (fft_weather_e) is not the same as the GNS record
+weather/time field. They are separate fields here. Some scenaios have a weather
+value of 16 (0b00010000 / 0x10). I assume this is because the 4 high bits are
+used for some other purpose but I'm not sure yet.
+
+Format: AA BC DE FG GH HI IJ JJ JK LL MN OO
++------+---------+-------+------------------------------------------+
+| Pos  | Size    | Index | Description                              |
++------+---------+-------+------------------------------------------+
+| AA   | 2 bytes |   0-1 | event_id.                                |
+| B    | 1 bytes |     2 | map_id                                   |
+| C    | 1 bytes |     3 | fft_weather_e & FFT_WEATHER_UNKNOWN_0x10 |
+| D    | 1 bytes |     4 | fft_time_e                               |
+| E    | 1 bytes |     5 | music_file_first                         |
+| F    | 1 bytes |     6 | music_file_second                        |
+| GG   | 2 bytes |   7-8 | entd_id                                  |
+| HH   | 2 bytes |  9-10 | grid_first (ATTACK.OUT at 0xBBD4)        |
+| II   | 2 bytes | 11-12 | grid_second                              |
+| JJJJ | 4 bytes | 13-16 | unknown_jjjj                             |
+| K    | 1 bytes |    17 | ramza_required                           |
+| LL   | 2 bytes | 18-19 | next_event_id                            |
+| M    | 1 bytes |    20 | fft_nextstep_e                           |
+| N    | 1 bytes |    21 | unknown_n                                |
+| OO   | 2 bytes | 22-23 | script_id                                |
++------+---------+-------+------------------------------------------+
+
+Reference: https://ffhacktics.com/wiki/ATTACK.OUT
+
+================================================================================
+*/
+
+enum {
+    FFT_SCENARIO_COUNT = 491,
+    FFT_SCENARIO_SIZE = 24,
+    FFT_SCENARIO_OFFSET = 0x10938
+};
+
+// fft_nextstep_e defines what happens after the scenario ends.
+typedef enum {
+    FFT_NEXTSTEP_NONE = 0x00,
+    FFT_NEXTSTEP_WORLD_MAP = 0x80,
+    FFT_NEXTSTEP_EVENT = 0x81,
+    FFT_NEXTSTEP_RESET = 0x82,
+} fft_nextstep_e;
+
+typedef struct {
+    uint16_t event_id;
+    uint8_t map_id;
+    fft_weather_e weather;
+    fft_time_e time;
+    uint8_t music_file_first;
+    uint8_t music_file_second;
+    uint16_t entd_id;
+    uint16_t grid_first;
+    uint16_t grid_second;
+    uint32_t unknown_jjjj;
+    uint8_t ramza_required;
+    uint16_t next_event_id;
+    fft_nextstep_e next_step;
+    uint8_t unknown_n;
+    uint16_t script_id;
+    uint8_t data[FFT_SCENARIO_SIZE];
+} fft_scenario_t;
+
+fft_scenario_t fft_scenario_get_scenario(uint32_t);
+
+/*
+================================================================================
+Event
+================================================================================
+
+Events
+
+Reference: https://github.com/Glain/FFTPatcher/blob/master/EntryEdit/EntryData/PSX/ScenarioNames.xml
+
+================================================================================
+*/
+
+enum {
+    FFT_EVENT_SIZE = 8192,
+    FFT_EVENT_COUNT = 491
+};
+
+// Event descriptions are event ids, names and if they are usable. For viewing
+// scenarios, we only use events that have text and code related to them. We
+// index into this list by scenario_t.event_id, but some of these are never
+// indexed by a scenario. They are documented below starting at 0x0190. Seems to
+// be the game over event and events related to random battles.
+//
+// The event_id always matchess the battle.event_id.
+typedef struct {
+    uint16_t event_id;
+    uint16_t scenario_id;
+    bool usable;
+    const char* name;
+} fft_event_desc_t;
+
+extern fft_event_desc_t event_desc_list[];
+
+static_assert(FFT_EVENT_COUNT == FFT_SCENARIO_COUNT, "Event/battle count mismatch");
+
 #ifdef __cplusplus
 }
 #endif
@@ -1481,7 +1600,7 @@ static struct {
 
 /*
 ================================================================================
-Defines
+Utilities
 ================================================================================
 */
 
@@ -1515,6 +1634,16 @@ Defines
             exit(EXIT_FAILURE);                                 \
         }                                                       \
     } while (0)
+
+// Print a byte as binary for debugging.
+// Example output: "label: 0b10101010"
+static void print_byte(const char* label, uint8_t byte) {
+    printf("%s: 0b", label);
+    for (int i = 7; i >= 0; i--) {
+        printf("%d", (byte >> i) & 1);
+    }
+    printf("\n");
+}
 
 /*
 ================================================================================
@@ -1775,6 +1904,16 @@ const char* fft_time_str(fft_time_e value) {
     }
 }
 
+static void validate_time(fft_time_e value) {
+    switch (value) {
+    case FFT_TIME_DAY:
+    case FFT_TIME_NIGHT:
+        return;
+    default:
+        FFT_ASSERT(false, "Invalid time value: %d", value);
+    }
+}
+
 const char* fft_weather_str(fft_weather_e value) {
     switch (value) {
     case FFT_WEATHER_NONE:
@@ -1789,6 +1928,21 @@ const char* fft_weather_str(fft_weather_e value) {
         return "VeryStrong";
     default:
         return "Unknown";
+    }
+}
+
+static void validate_weather(fft_weather_e value) {
+    switch (value) {
+    case FFT_WEATHER_NONE:
+    case FFT_WEATHER_NONE_ALT:
+    case FFT_WEATHER_NORMAL:
+    case FFT_WEATHER_STRONG:
+    case FFT_WEATHER_VERY_STRONG:
+    case FFT_WEATHER_UNKNOWN_0x10: // Allow this until we understand it
+    case FFT_WEATHER_UNKNOWN_0x20: // Allow this until we understand it
+        return;
+    default:
+        FFT_ASSERT(false, "Invalid weather value: %d", value);
     }
 }
 
@@ -1822,7 +1976,9 @@ static fft_record_t fft_record_read(fft_span_t* span) {
     // - time    = 0b10000000
     // - weather = 0b01110000
     fft_time_e time = (fft_time_e)((time_and_weather >> 7) & 0x1);
+    validate_time(time);
     fft_weather_e weather = (fft_weather_e)((time_and_weather >> 4) & 0x7);
+    validate_weather(weather);
 
     fft_record_t record = {
         .type = type,
@@ -2163,6 +2319,7 @@ static bool fft_image_write_ppm(const fft_image_t* image, const char* path) {
 Mesh Header Implementation
 ================================================================================
 */
+
 fft_mesh_header_t fft_mesh_header_read(fft_span_t* span) {
     fft_mesh_header_t header = { 0 };
 
@@ -2714,6 +2871,65 @@ void fft_map_data_destroy(fft_map_data_t* map) {
 
 /*
 ================================================================================
+Battle Implementation
+================================================================================
+*/
+
+static void validate_nextstep(fft_nextstep_e step) {
+    switch (step) {
+    case FFT_NEXTSTEP_NONE:
+    case FFT_NEXTSTEP_WORLD_MAP:
+    case FFT_NEXTSTEP_EVENT:
+    case FFT_NEXTSTEP_RESET:
+        return;
+    default:
+        FFT_ASSERT(false, "Invalid step value: %d", step);
+    }
+}
+
+fft_scenario_t fft_scenario_get_scenario(uint32_t id) {
+    FFT_ASSERT(id < FFT_SCENARIO_COUNT, "Battle id %d out of bounds", id);
+    fft_span_t attack_out_file = fft_io_open(F_EVENT__ATTACK_OUT);
+
+    // Create a separate span view for this battle
+    fft_span_t span = { 0 };
+    span.data = attack_out_file.data + FFT_SCENARIO_OFFSET + (id * FFT_SCENARIO_SIZE);
+    span.size = FFT_SCENARIO_SIZE;
+
+    fft_scenario_t scenario = { 0 };
+    scenario.event_id = fft_span_read_u16(&span);
+    scenario.map_id = fft_span_read_u8(&span);
+
+    scenario.weather = (fft_weather_e)fft_span_read_u8(&span);
+    scenario.time = (fft_time_e)fft_span_read_u8(&span);
+    scenario.music_file_first = fft_span_read_u8(&span);
+    scenario.music_file_second = fft_span_read_u8(&span);
+    scenario.entd_id = fft_span_read_u16(&span);
+    scenario.grid_first = fft_span_read_u16(&span);
+    scenario.grid_second = fft_span_read_u16(&span);
+    scenario.unknown_jjjj = fft_span_read_u32(&span);
+    scenario.ramza_required = fft_span_read_u8(&span);
+    scenario.next_event_id = fft_span_read_u16(&span);
+    scenario.next_step = (fft_nextstep_e)fft_span_read_u8(&span);
+    scenario.unknown_n = fft_span_read_u8(&span);
+    scenario.script_id = fft_span_read_u16(&span);
+    memcpy(&scenario.data, &span.data[0], FFT_SCENARIO_SIZE); // All 24 bytes
+
+    validate_time(scenario.time);
+    validate_weather(scenario.weather);
+    validate_nextstep(scenario.next_step);
+
+    if (scenario.next_step == FFT_NEXTSTEP_EVENT) {
+        FFT_ASSERT(scenario.next_event_id != 0, "Battle with next step EVENT must have a next event id");
+    }
+
+    fft_io_close(attack_out_file);
+
+    return scenario;
+}
+
+/*
+================================================================================
 Entrypoint Implementation
 ================================================================================
 */
@@ -2875,6 +3091,501 @@ const fft_map_desc_t fft_map_list[FFT_MAP_DESC_LIST_COUNT] = {
     { 125, F_MAP__MAP125_GNS, true, "Unknown" },
     { 126, 0, false, "???" },
     { 127, 0, false, "???" },
+};
+
+fft_event_desc_t fft_event_desc_list[FFT_EVENT_COUNT] = {
+    { 0x0001, 0x0000, false, "Orbonne Prayer (Setup)" },
+    { 0x0002, 0x0001, true, "Orbonne Prayer" },
+    { 0x0003, 0x0002, false, "Orbonne Battle (Setup)" },
+    { 0x0004, 0x0003, true, "Orbonne Battle" },
+    { 0x0005, 0x0004, true, "Orbonne Battle (Gafgarion and Agrias chat)" },
+    { 0x0006, 0x0005, true, "Orbonne Battle (Abducting the Princess)" },
+    { 0x0007, 0x0006, false, "Military Academy (Setup)" },
+    { 0x0008, 0x0007, true, "Military Academy" },
+    { 0x0009, 0x0008, false, "Gariland Fight (Setup)" },
+    { 0x000A, 0x0009, true, "Gariland Fight" },
+    { 0x000B, 0x000A, true, "Gariland Fight (Ramza, Delita, Thief Chat)" },
+    { 0x000C, 0x000B, true, "Gariland Fight (Ramza talking about honest lives)" },
+    { 0x000D, 0x000C, false, "Balbanes's Death (Setup)" },
+    { 0x000E, 0x000D, true, "Balbanes's Death" },
+    { 0x000F, 0x000E, false, "Mandalia Plains (Setup)" },
+    { 0x0010, 0x000F, true, "Mandalia Plains (Options Given)" },
+    { 0x0011, 0x0010, true, "Mandalia Plains (Destroy Corps Chosen)" },
+    { 0x0012, 0x0011, true, "Mandalia Plains (Save Algus Chosen)" },
+    { 0x0013, 0x0012, true, "Mandalia Plains (Algus First Turn)" },
+    { 0x0014, 0x0013, true, "Mandalia Plains (Algus KO'd, Destroy Chosen)" },
+    { 0x0015, 0x0014, true, "Mandalia Plains (Algus KO'd, Save Chosen)" },
+    { 0x0016, 0x0015, true, "Mandalia Plains (Victory, Algus KO'd)" },
+    { 0x0017, 0x0016, true, "Mandalia Plains (Victory, Algus Alive)" },
+    { 0x0018, 0x0017, false, "Introducing Algus (Setup)" },
+    { 0x0019, 0x0018, true, "Introducing Algus" },
+    { 0x001A, 0x0019, false, "Returning to Igros (Setup)" },
+    { 0x001B, 0x001A, true, "Returning to Igros" },
+    { 0x001C, 0x001B, false, "Family Meeting (Setup)" },
+    { 0x001D, 0x001C, true, "Family Meeting" },
+    { 0x001E, 0x001D, false, "Sweegy Woods (Setup)" },
+    { 0x001F, 0x001E, true, "Sweegy Woods" },
+    { 0x0020, 0x001F, true, "Sweegy Woods (Victory)" },
+    { 0x0021, 0x0020, false, "Dorter Trade City1 (Setup)" },
+    { 0x0022, 0x0021, true, "Dorter Trade City1" },
+    { 0x0023, 0x0022, true, "Dorter Trade City1 (Algus and Delita talk)" },
+    { 0x0024, 0x0023, true, "Dorter Trade City1 (Victory)" },
+    { 0x0025, 0x0024, false, "Interrogation (Setup)" },
+    { 0x0026, 0x0025, true, "Interrogation" },
+    { 0x0027, 0x0026, false, "Sand Rat Cellar (Setup)" },
+    { 0x0028, 0x0027, true, "Sand Rat Cellar" },
+    { 0x0029, 0x0028, true, "Sand Rat Cellar (Victory)" },
+    { 0x002A, 0x0029, false, "Gustav vs. Wiegraf (Setup)" },
+    { 0x002B, 0x002A, true, "Gustav vs. Wiegraf" },
+    { 0x002C, 0x002B, false, "Larg's Praise (Setup)" },
+    { 0x002D, 0x002C, true, "Larg's Praise" },
+    { 0x002E, 0x002D, false, "Miluda1 (Setup)" },
+    { 0x002F, 0x002E, true, "Miluda1" },
+    { 0x0030, 0x002F, true, "Miluda1 (Miluda and Algus arguing)" },
+    { 0x0031, 0x0030, true, "Miluda1 (Delita talking)" },
+    { 0x0032, 0x0031, true, "Miluda1 (Victory)" },
+    { 0x0033, 0x0032, false, "Releasing Miluda (Setup)" },
+    { 0x0034, 0x0033, true, "Releasing Miluda" },
+    { 0x0035, 0x0034, false, "Attack on the Beoulves (Setup)" },
+    { 0x0036, 0x0035, true, "Attack on the Beoulves" },
+    { 0x0037, 0x0036, false, "Meeting with bedridden Dycedarg (Setup)" },
+    { 0x0038, 0x0037, true, "Meeting with bedridden Dycedarg" },
+    { 0x0039, 0x0038, false, "Expelling Algus (Setup)" },
+    { 0x003A, 0x0039, true, "Expelling Algus" },
+    { 0x003B, 0x003A, false, "Reed Whistle (Setup)" },
+    { 0x003C, 0x003B, true, "Reed Whistle" },
+    { 0x003D, 0x003C, false, "Miluda2 (Setup)" },
+    { 0x003E, 0x003D, true, "Miluda2" },
+    { 0x003F, 0x003E, true, "Miluda2 (Delita talking with Miluda)" },
+    { 0x0040, 0x003F, true, "Miluda2 (Miluda half HP)" },
+    { 0x0041, 0x0040, true, "Miluda2 (Ramza debating with Miluda)" },
+    { 0x0042, 0x0041, true, "Miluda2 (Ramza pleading with Miluda)" },
+    { 0x0043, 0x0042, true, "Miluda2 (Miluda's Death)" },
+    { 0x0044, 0x0043, false, "Wiegraf berating Golagros (Setup)" },
+    { 0x0045, 0x0044, true, "Wiegraf berating Golagros" },
+    { 0x0046, 0x0045, false, "Wiegraf1 (Setup)" },
+    { 0x0047, 0x0046, true, "Wiegraf1" },
+    { 0x0048, 0x0047, true, "Wiegraf1 (Delita, Ramza, Wiegraf talk)" },
+    { 0x0049, 0x0048, true, "Wiegraf1 (Ramza and Wiegraf debate)" },
+    { 0x004A, 0x0049, true, "Wiegraf1 (Ramza and Wiegraf talk)" },
+    { 0x004B, 0x004A, true, "Wiegraf1 (Victory)" },
+    { 0x004C, 0x004B, false, "Finding Teta Missing (Setup)" },
+    { 0x004D, 0x004C, true, "Finding Teta Missing" },
+    { 0x004E, 0x004D, false, "Fort Zeakden (Setup)" },
+    { 0x004F, 0x004E, true, "Fort Zeakden" },
+    { 0x0050, 0x004F, true, "Fort Zeakden (Algus, Ramza round 1)" },
+    { 0x0051, 0x0050, true, "Fort Zeakden (Algus, Ramza round 2)" },
+    { 0x0052, 0x0051, true, "Fort Zeakden (Algus, Ramza round 3)" },
+    { 0x0053, 0x0052, true, "Fort Zeakden (Destroy Chosen at Mandalia)" },
+    { 0x0054, 0x0053, true, "Fort Zeakden (Save Chosen at Mandalia)" },
+    { 0x0055, 0x0054, true, "Fort Zeakden (Delita's First Turn)" },
+    { 0x0056, 0x0055, true, "Fort Zeakden (Algus, Delita round 1)" },
+    { 0x0057, 0x0056, true, "Fort Zeakden (Ramza, Delita talking)" },
+    { 0x0058, 0x0057, true, "Fort Zeakden (Victory)" },
+    { 0x0059, 0x0058, false, "Partings (Setup)" },
+    { 0x005A, 0x0059, true, "Partings" },
+    { 0x005B, 0x005A, false, "Deep Dungeon NOGIAS (Setup)" },
+    { 0x005C, 0x005B, false, "Deep Dungeon NOGIAS (Battle)" },
+    { 0x005D, 0x005C, true, "Deep Dungeon Panel Found" },
+    { 0x005E, 0x005D, false, "Deep Dungeon (Victory - Used for all Floors)" },
+    { 0x005F, 0x005E, false, "Deep Dungeon TERMINATE(Setup)" },
+    { 0x0060, 0x005F, false, "Deep Dungeon TERMINATE (Battle)" },
+    { 0x0061, 0x0060, false, "Deep Dungeon DELTA (Setup)" },
+    { 0x0062, 0x0061, false, "Deep Dungeon DELTA (Battle)" },
+    { 0x0063, 0x0062, false, "Deep Dungeon VALKYRIES (Setup)" },
+    { 0x0064, 0x0063, false, "Deep Dungeon VALKYRIES (Battle)" },
+    { 0x0065, 0x0064, false, "Deep Dungeon MLAPAN (Setup)" },
+    { 0x0066, 0x0065, false, "Deep Dungeon MLAPAN (Battle)" },
+    { 0x0067, 0x0066, false, "Deep Dungeon TIGER (Setup)" },
+    { 0x0068, 0x0067, false, "Deep Dungeon TIGER (Battle)" },
+    { 0x0069, 0x0068, false, "Deep Dungeon BRIDGE (Setup)" },
+    { 0x006A, 0x0069, false, "Deep Dungeon BRIDGE (Battle)" },
+    { 0x006B, 0x006A, false, "Deep Dungeon VOYAGE (Setup)" },
+    { 0x006C, 0x006B, false, "Deep Dungeon VOYAGE (Battle)" },
+    { 0x006D, 0x006C, false, "Deep Dungeon HORROR (Setup)" },
+    { 0x006E, 0x006D, false, "Deep Dungeon HORROR (Battle)" },
+    { 0x006F, 0x006E, false, "Elidibs (Setup)" },
+    { 0x0070, 0x006F, true, "Elidibs" },
+    { 0x0071, 0x0070, true, "Elidibs (Victory)" },
+    { 0x0072, 0x0071, false, "Deep Dungeon END (Setup)" },
+    { 0x0073, 0x0072, false, "Deep Dungeon END (Battle)" },
+    { 0x0074, 0x0073, false, "Chapter 2 Start (Setup)" },
+    { 0x0075, 0x0074, true, "Chapter 2 Start" },
+    { 0x0076, 0x0075, false, "Dorter2 (Setup)" },
+    { 0x0077, 0x0076, true, "Dorter2" },
+    { 0x0078, 0x0077, true, "Dorter2 (Victory)" },
+    { 0x0079, 0x0078, false, "Araguay Woods (Setup)" },
+    { 0x007A, 0x0079, true, "Araguay Woods (Options Given)" },
+    { 0x007B, 0x007A, true, "Araguay Woods (Kill Enemies Chosen)" },
+    { 0x007C, 0x007B, true, "Araguay Woods (Save Boco Chosen)" },
+    { 0x007D, 0x007C, true, "Araguay Woods (Boco KO'd, Kill Enemies Chosen)" },
+    { 0x007E, 0x007D, true, "Araguay Woods (Boco KO'd, Save Boco Chosen)" },
+    { 0x007F, 0x007E, true, "Araguay Woods (Victory)" },
+    { 0x0080, 0x007F, false, "Zirekile Falls (Setup)" },
+    { 0x0081, 0x0080, true, "Zirekile Falls" },
+    { 0x0082, 0x0081, true, "Zirekile Falls (Gafgarion and Agrias talk)" },
+    { 0x0083, 0x0082, true, "Zirekile Falls (Gafgarion, Ramza, Delita, talk)" },
+    { 0x0084, 0x0083, true, "Zirekile Falls (Delita, Ovelia talk)" },
+    { 0x0085, 0x0084, true, "Zirekile Falls (Ovelia's Death)" },
+    { 0x0086, 0x0085, true, "Zirekile Falls (Gafgarion and Ramza arguing)" },
+    { 0x0087, 0x0086, true, "Zirekile Falls (Gafgarion retreat)" },
+    { 0x0088, 0x0087, false, "Zirekile Falls (Victory)" },
+    { 0x0089, 0x0088, false, "Ovelia Joins (Setup)" },
+    { 0x008A, 0x0089, true, "Ovelia Joins" },
+    { 0x008B, 0x008A, false, "Zalamd Fort City (Setup)" },
+    { 0x008C, 0x008B, true, "Zaland Fort City (Options Given)" },
+    { 0x008D, 0x008C, true, "Zaland Fort City (Kill Enemies Chosen)" },
+    { 0x008E, 0x008D, true, "Zaland Fort City (Save Mustadio Chosen)" },
+    { 0x008F, 0x008E, true, "Zaland Fort City (Mustadio KO'd, Kill Chosen)" },
+    { 0x0090, 0x008F, true, "Zaland Fort City (Mustadio KO'd, Save Chosen)" },
+    { 0x0091, 0x0090, true, "Zaland Fort City (Victory)" },
+    { 0x0092, 0x0091, false, "Ramza, Mustadio, Agrias and Ovelia meeting (Setup)" },
+    { 0x0093, 0x0092, true, "Ramza, Mustadio, Agrias and Ovelia meeting" },
+    { 0x0094, 0x0093, false, "Ruins of Zaland (Setup)" },
+    { 0x0095, 0x0094, true, "Ruins of Zaland" },
+    { 0x0096, 0x0095, false, "Bariaus Hill (Setup)" },
+    { 0x0097, 0x0096, true, "Bariaus Hill" },
+    { 0x0098, 0x0097, true, "Bariaus Hill (Victory)" },
+    { 0x0099, 0x0098, false, "Dycedarg and Gafgarion Reunion (Setup)" },
+    { 0x009A, 0x0099, true, "Dycedarg and Gafgarion Reunion" },
+    { 0x009B, 0x009A, false, "Gate of Lionel Castle (Setup)" },
+    { 0x009C, 0x009B, true, "Gate of Lionel Castle" },
+    { 0x009D, 0x009C, false, "Meeting with Draclay (Setup)" },
+    { 0x009E, 0x009D, true, "Meeting with Draclau" },
+    { 0x009F, 0x009E, false, "Besrodio Kidnapped (Setup)" },
+    { 0x00A0, 0x009F, true, "Besrodio Kidnapped" },
+    { 0x00A1, 0x00A0, false, "Zigolis Swamp (Setup)" },
+    { 0x00A2, 0x00A1, true, "Zigolis Swamp" },
+    { 0x00A3, 0x00A2, true, "Zigolis Swamp (Victory)" },
+    { 0x00A4, 0x00A3, false, "Goug Machine City Town (Setup)" },
+    { 0x00A5, 0x00A4, true, "Goug Machine City Town" },
+    { 0x00A6, 0x00A5, false, "Goug Machine City (Setup)" },
+    { 0x00A7, 0x00A6, true, "Goug Machine City" },
+    { 0x00A8, 0x00A7, true, "Goug Machine City (Victory)" },
+    { 0x00A9, 0x00A8, false, "Besrodio Saved (Setup)" },
+    { 0x00AA, 0x00A9, true, "Besrodio Saved" },
+    { 0x00AB, 0x00AA, false, "Warjilis Port (Setup)" },
+    { 0x00AC, 0x00AB, true, "Warjilis Port" },
+    { 0x00AD, 0x00AC, false, "Draclau hires Gafgarion (Setup)" },
+    { 0x00AE, 0x00AD, true, "Draclau hires Gafgarion" },
+    { 0x00AF, 0x00AE, false, "Bariaus Valley (Setup)" },
+    { 0x00B0, 0x00AF, true, "Bariaus Valley" },
+    { 0x00B1, 0x00B0, true, "Bariaus Valley (Agrias and Ramza talk)" },
+    { 0x00B2, 0x00B1, true, "Bariaus Valley (Agrias Death)" },
+    { 0x00B3, 0x00B2, true, "Bariaus Valley (Victory)" },
+    { 0x00B4, 0x00B3, false, "Golgorand Execution Site (Setup)" },
+    { 0x00B5, 0x00B4, true, "Golgorand Execution Site" },
+    { 0x00B6, 0x00B5, true, "Golgorand Execution Site (Gafgarion and Agrias talk)" },
+    { 0x00B7, 0x00B6, true, "Golgorand Execution Site (Gafgarion and Ramza talk first part)" },
+    { 0x00B8, 0x00B7, true, "Golgorand Execution Site (Gafgarion and Ramza talk second part)" },
+    { 0x00B9, 0x00B8, true, "Golgorand Execution Site (Gafgarion and Ramza talk third part)" },
+    { 0x00BA, 0x00B9, true, "Golgorand Execution Site (Gafgarion, Agrias and Ramza talk)" },
+    { 0x00BB, 0x00BA, true, "Golgorand Execution Site (Gafgarion retreats)" },
+    { 0x00BC, 0x00BB, true, "Golgorand Execution Site (Victory)" },
+    { 0x00BD, 0x00BC, false, "Substitute (Setup)" },
+    { 0x00BE, 0x00BD, true, "Substitute" },
+    { 0x00BF, 0x00BE, false, "Lionel Castle Gate (Setup)" },
+    { 0x00C0, 0x00BF, true, "Lionel Castle Gate" },
+    { 0x00C1, 0x00C0, true, "Lionel Castle Gate (Ramza opens the gate)" },
+    { 0x00C2, 0x00C1, true, "Lionel Castle Gate (Gafgarion Death)" },
+    { 0x00C3, 0x00C2, true, "Lionel Castle Gate (Victory)" },
+    { 0x00C4, 0x00C3, false, "Inside of Lionel Castle (Setup)" },
+    { 0x00C5, 0x00C4, true, "Inside of Lionel Castle" },
+    { 0x00C6, 0x00C5, true, "Inside of Lionel Castle (Queklain and Ramza talk)" },
+    { 0x00C7, 0x00C6, true, "Inside of Lionel Castle (Victory)" },
+    { 0x00C8, 0x00C7, false, "The Lion War Outbreak (Setup)" },
+    { 0x00C9, 0x00C8, true, "The Lion War Outbreak" },
+    { 0x00CA, 0x00C9, false, "Chapter 3 Start (Setup)" },
+    { 0x00CB, 0x00CA, true, "Chapter 3 Start" },
+    { 0x00CC, 0x00CB, false, "Goland Coal City (Setup)" },
+    { 0x00CD, 0x00CC, true, "Goland Coal City" },
+    { 0x00CE, 0x00CD, true, "Goland Coal City (Olan Death)" },
+    { 0x00CF, 0x00CE, false, "Goland Coal City (Victory)" },
+    { 0x00D0, 0x00CF, false, "Goland Coal City post battle (setup)" },
+    { 0x00D1, 0x00D0, true, "Goland Coal City post battle" },
+    { 0x00D2, 0x00D1, false, "Steel Ball Found! (Setup)" },
+    { 0x00D3, 0x00D2, true, "Steel Ball Found!" },
+    { 0x00D4, 0x00D3, false, "Worker 8 Activated (setup)" },
+    { 0x00D5, 0x00D4, true, "Worker 8 Activated" },
+    { 0x00D6, 0x00D5, false, "Summoning Machine Found! (Setup)" },
+    { 0x00D7, 0x00D6, true, "Summoning Machine Found!" },
+    { 0x00D8, 0x00D7, false, "Cloud Summoned (Setup)" },
+    { 0x00D9, 0x00D8, true, "Cloud Summoned" },
+    { 0x00DA, 0x00D9, false, "Zarghidas (Setup)" },
+    { 0x00DB, 0x00DA, true, "Zarghidas" },
+    { 0x00DC, 0x00DB, true, "Zarghidas (Cloud freaking out)" },
+    { 0x00DD, 0x00DC, true, "Zarghidas (Cloud Death)" },
+    { 0x00DE, 0x00DD, true, "Zarghidas (Victory)" },
+    { 0x00DF, 0x00DE, false, "Talk with Zalbag in Lesalia (Setup)" },
+    { 0x00E0, 0x00DF, true, "Talk with Zalbag in Lesalia" },
+    { 0x00E1, 0x00E0, false, "Outside Castle Gate in Lesalia Zalmo 1 (Setup)" },
+    { 0x00E2, 0x00E1, true, "Outside Castle Gate in Lesalia Zalmo 1" },
+    { 0x00E3, 0x00E2, true, "Outside Castle Gate in Lesalia Zalmo 1 (Zalmo and Ramza talk)" },
+    { 0x00E4, 0x00E3, true, "Outside Castle Gate in Lesalia Zalmo 1 (Alma and Ramza talk)" },
+    { 0x00E5, 0x00E4, true, "Outside Castle Gate in Lesalia Zalmo 1 (Victory)" },
+    { 0x00E6, 0x00E5, false, "Outside Castle Gate in Lesalia Talk with Alma (Setup)" },
+    { 0x00E7, 0x00E6, true, "Outside Castle Gate in Lesalia Talk with Alma" },
+    { 0x00E8, 0x00E7, false, "Orbonne Monastery (Setup)" },
+    { 0x00E9, 0x00E8, true, "Orbonne Monastery" },
+    { 0x00EA, 0x00E9, false, "Underground Book Storage Second Floor (Setup)" },
+    { 0x00EB, 0x00EA, true, "Underground Book Storage Second Floor" },
+    { 0x00EC, 0x00EB, true, "Underground Book Storage Second Floor (Victory)" },
+    { 0x00ED, 0x00EC, false, "Underground Book Storage Third Floor (Setup)" },
+    { 0x00EE, 0x00ED, true, "Underground Book Storage Third Floor" },
+    { 0x00EF, 0x00EE, true, "Underground Book Storage Third Floor (Izlude, Ramza talk first)" },
+    { 0x00F0, 0x00EF, true, "Underground Book Storage Third Floor (Izlude, Ramza talk second)" },
+    { 0x00F1, 0x00F0, true, "Underground Book Storage Third Floor (Victory)" },
+    { 0x00F2, 0x00F1, false, "Underground Book Storage First Floor (Setup)" },
+    { 0x00F3, 0x00F2, true, "Underground Book Storage First Floor" },
+    { 0x00F4, 0x00F3, true, "Underground Book Storage First Floor (Wiegraf talk)" },
+    { 0x00F5, 0x00F4, true, "Underground Book Storage First Floor (Wiegraf, Ramza talk first)" },
+    { 0x00F6, 0x00F5, true, "Underground Book Storage First Floor (Wiegraf, Ramza talk second)" },
+    { 0x00F7, 0x00F6, true, "Underground Book Storage First Floor (Victory)" },
+    { 0x00F8, 0x00F7, false, "Meet Velius (Setup)" },
+    { 0x00F9, 0x00F8, true, "Meet Velius" },
+    { 0x00FA, 0x00F9, false, "Malak and the Scriptures (Setup)" },
+    { 0x00FB, 0x00FA, true, "Malak and the Scriptures (Options Given)" },
+    { 0x00FC, 0x00FB, true, "Malak and the Scriptures (Yes Chosen)" },
+    { 0x00FD, 0x00FC, true, "Malak and the Scriptures (No Chosen)" },
+    { 0x00FE, 0x00FD, false, "Delita swears allegiance to Ovelia (Setup)" },
+    { 0x00FF, 0x00FE, true, "Delita swears allegiance to Ovelia" },
+    { 0x0100, 0x00FF, false, "Grog Hill (Setup)" },
+    { 0x0101, 0x0100, true, "Grog Hill" },
+    { 0x0102, 0x0101, true, "Grog Hill (Victory)" },
+    { 0x0103, 0x0102, false, "Meet Again with Olan (Setup)" },
+    { 0x0104, 0x0103, true, "Meet again with Olan" },
+    { 0x0105, 0x0104, false, "Rescue Rafa (Setup)" },
+    { 0x0106, 0x0105, true, "Rescue Rafa" },
+    { 0x0107, 0x0106, true, "Rescue Rafa (Malak and Ramza talk)" },
+    { 0x0108, 0x0107, true, "Rescue Rafa (Malak, Ninja and Ramza talk)" },
+    { 0x0109, 0x0108, true, "Rescue Rafa (Malak Retreat)" },
+    { 0x010A, 0x0109, true, "Rescue Rafa (Rafa Death, Malak Present)" },
+    { 0x010B, 0x010A, true, "Rescue Rafa (Rafa Death, Malak Retreated)" },
+    { 0x010C, 0x010B, true, "Rescue Rafa (Victory)" },
+    { 0x010D, 0x010C, false, "Exploding Frog (Setup)" },
+    { 0x010E, 0x010D, true, "Exploding Frog" },
+    { 0x010F, 0x010E, false, "Yuguo Woods (Setup)" },
+    { 0x0110, 0x010F, true, "Yuguo Woods" },
+    { 0x0111, 0x0110, true, "Yuguo Woods (Victory)" },
+    { 0x0112, 0x0111, false, "Barinten threatens Vormav (Setup)" },
+    { 0x0113, 0x0112, true, "Barinten threatens Vormav" },
+    { 0x0114, 0x0113, false, "Riovanes Castle Entrance (Setup)" },
+    { 0x0115, 0x0114, true, "Riovanes Castle Entrance" },
+    { 0x0116, 0x0115, true, "Riovanes Castle Entrance (Rafa, Malak and Ramza talk)" },
+    { 0x0117, 0x0116, true, "Riovanes Castle Entrance (Malak Defeated)" },
+    { 0x0118, 0x0117, true, "Riovanes Castle Entrance (Rafa Defeated)" },
+    { 0x0119, 0x0118, true, "Riovanes Castle Entrance (Victory)" },
+    { 0x011A, 0x0119, false, "Escaping Alma (Setup)" },
+    { 0x011B, 0x011A, true, "Escaping Alma" },
+    { 0x011C, 0x011B, false, "Inside of Riovanes Castle (Setup)" },
+    { 0x011D, 0x011C, true, "Inside of Riovanes Castle" },
+    { 0x011E, 0x011D, true, "Inside of Riovanes Castle (Wiegraf and Ramza talk)" },
+    { 0x011F, 0x011E, true, "Inside of Riovanes Castle (Here comes Velius)" },
+    { 0x0120, 0x011F, true, "Inside of Riovanes Castle (Victory)" },
+    { 0x0121, 0x0120, false, "Ajora's vessel (Setup)" },
+    { 0x0122, 0x0121, true, "Ajora's vessel" },
+    { 0x0123, 0x0122, false, "Rooftop of Riovanes Castle (Setup)" },
+    { 0x0124, 0x0123, true, "Rooftop of Riovanes Castle" },
+    { 0x0125, 0x0124, true, "Rooftop of Riovanes Castle (Rafa Death)" },
+    { 0x0126, 0x0125, true, "Rooftop of Riovanes Castle (Victory)" },
+    { 0x0127, 0x0126, false, "Reviving Malak (Setup)" },
+    { 0x0128, 0x0127, true, "Reviving Malak" },
+    { 0x0129, 0x0128, false, "Searching for Alma (Setup)" },
+    { 0x012A, 0x0129, true, "Searching for Alma" },
+    { 0x012B, 0x012A, false, "Things Obtained (Setup)" },
+    { 0x012C, 0x012B, true, "Things Obtained" },
+    { 0x012D, 0x012C, false, "Underground Book Storage Fourth Floor (Setup)" },
+    { 0x012E, 0x012D, true, "Underground Book Storage Fourth Floor" },
+    { 0x012F, 0x012E, true, "Underground Book Storage Fourth Floor (Victory)" },
+    { 0x0130, 0x012F, false, "Underground Book Storage Fifth Floor (Setup)" },
+    { 0x0131, 0x0130, true, "Underground Book Storage Fifth Floor" },
+    { 0x0132, 0x0131, true, "Underground Book Storage Fifth Floor (Rofel and Ramza talk)" },
+    { 0x0133, 0x0132, true, "Underground Book Storage Fifth Floor (Victory)" },
+    { 0x0134, 0x0133, false, "Entrance to the other world (Setup)" },
+    { 0x0135, 0x0134, true, "Entrance to the other world" },
+    { 0x0136, 0x0135, false, "Murond Death City (Setup)" },
+    { 0x0137, 0x0136, true, "Murond Death City" },
+    { 0x0138, 0x0137, true, "Murond Death City (Kletian and Ramza talk)" },
+    { 0x0139, 0x0138, true, "Murond Death City (Victory)" },
+    { 0x013A, 0x0139, false, "Lost Sacred Precincts (Setup)" },
+    { 0x013B, 0x013A, true, "Lost Sacred Precincts" },
+    { 0x013C, 0x013B, true, "Lost Sacred Precincts (Balk and Ramza talk)" },
+    { 0x013D, 0x013C, true, "Lost Sacred Precincts (Victory)" },
+    { 0x013E, 0x013D, false, "Graveyard of Airships (Setup)" },
+    { 0x013F, 0x013E, true, "Graveyard of Airships" },
+    { 0x0140, 0x013F, true, "Graveyard of Airships (Hashmalum and Ramza talk)" },
+    { 0x0141, 0x0140, true, "Graveyard of Airships (Victory)" },
+    { 0x0142, 0x0141, false, "Graveyard of Airships (Setup)" },
+    { 0x0143, 0x0142, true, "Graveyard of Airships" },
+    { 0x0144, 0x0143, true, "Graveyard of Airships (Here comes Altima 2)" },
+    { 0x0145, 0x0144, true, "Graveyard of Airships (Victory)" },
+    { 0x0146, 0x0145, false, "Reunion and Beyond" },
+    { 0x0147, 0x0146, true, "Reunion and beyond" },
+    { 0x0148, 0x0147, false, "Those Who Squirm In Darkness (Setup)" },
+    { 0x0149, 0x0148, true, "Those Who Squirm in Darkness" },
+    { 0x014A, 0x0149, false, "A Man with the Holy Stone (Setup)" },
+    { 0x014B, 0x014A, true, "A Man with the Holy Stone" },
+    { 0x014C, 0x014B, false, "Doguola Pass (Setup)" },
+    { 0x014D, 0x014C, true, "Doguola Pass" },
+    { 0x014E, 0x014D, false, "Doguola Pass (Victory)" },
+    { 0x014F, 0x014E, false, "Bervenia Free City (Setup)" },
+    { 0x0150, 0x014F, true, "Bervenia Free City" },
+    { 0x0151, 0x0150, true, "Bervenia Free City (Meliadoul and Ramza talk first part)" },
+    { 0x0152, 0x0151, true, "Bervenia Free City (Meliadoul and Ramza talk second part)" },
+    { 0x0153, 0x0152, true, "Bervenia Free City (Meliadoul and Ramza talk third part)" },
+    { 0x0154, 0x0153, true, "Bervenia Free City (Victory)" },
+    { 0x0155, 0x0154, false, "Finath River (Setup)" },
+    { 0x0156, 0x0155, true, "Finath River" },
+    { 0x0157, 0x0156, false, "Finath River (Victory)" },
+    { 0x0158, 0x0157, false, "Delita's Thoughts (Setup)" },
+    { 0x0159, 0x0158, true, "Delita's Thoughts" },
+    { 0x015A, 0x0159, false, "Zalmo II (Setup)" },
+    { 0x015B, 0x015A, true, "Zalmo II" },
+    { 0x015C, 0x015B, true, "Zalmo II (Zalmo and Delita talk)" },
+    { 0x015D, 0x015C, true, "Zalmo II (Zalmo and Ramza talk)" },
+    { 0x015E, 0x015D, true, "Zalmo II (Victory)" },
+    { 0x015F, 0x015E, false, "Unstoppable Cog (Setup)" },
+    { 0x0160, 0x015F, true, "Unstoppable Cog" },
+    { 0x0161, 0x0160, false, "Balk I (Setup)" },
+    { 0x0162, 0x0161, true, "Balk I" },
+    { 0x0163, 0x0162, true, "Balk I (Balk and Ramza talk)" },
+    { 0x0164, 0x0163, true, "Balk I (Victory)" },
+    { 0x0165, 0x0164, false, "Seized T" },
+    { 0x0166, 0x0165, true, "Seized T" },
+    { 0x0167, 0x0166, false, "South Wall of Bethla Garrison (Setup)" },
+    { 0x0168, 0x0167, true, "South Wall of Bethla Garrison" },
+    { 0x0169, 0x0168, true, "South Wall of Bethla Garrison (Victory)" },
+    { 0x016A, 0x0169, false, "North Wall of Bethla Garrison (Setup)" },
+    { 0x016B, 0x016A, true, "North Wall of Bethla Garrison" },
+    { 0x016C, 0x016B, true, "North Wall of Bethla Garrison (Victory)" },
+    { 0x016D, 0x016C, false, "Assassination of Prince Larg (Setup)" },
+    { 0x016E, 0x016D, true, "Assassination of Prince Larg" },
+    { 0x016F, 0x016E, false, "Bethla Sluice (Setup)" },
+    { 0x0170, 0x016F, true, "Bethla Sluice" },
+    { 0x0171, 0x0170, true, "Bethla Sluice (First lever left)" },
+    { 0x0172, 0x0171, true, "Bethla Sluice (Second lever left)" },
+    { 0x0173, 0x0172, true, "Bethla Sluice (First lever right)" },
+    { 0x0174, 0x0173, true, "Bethla Sluice (Second lever right)" },
+    { 0x0175, 0x0174, false, "Rescue of Cid (Setup)" },
+    { 0x0176, 0x0175, true, "Rescue of Cid" },
+    { 0x0177, 0x0176, false, "Prince Goltana's Final Moments (Setup)" },
+    { 0x0178, 0x0177, true, "Prince Goltana's Final Moments" },
+    { 0x0179, 0x0178, false, "Germinas Peak (Setup)" },
+    { 0x017A, 0x0179, true, "Germinas Peak" },
+    { 0x017B, 0x017A, true, "Germinas Peak (Victory)" },
+    { 0x017C, 0x017B, false, "Poeskas Lake (Setup)" },
+    { 0x017D, 0x017C, true, "Poeskas Lake" },
+    { 0x017E, 0x017D, false, "Poeskas Lake (Victory)" },
+    { 0x017F, 0x017E, false, "Ambition of Dycedarg (Setup)" },
+    { 0x0180, 0x017F, true, "Ambition of Dycedarg" },
+    { 0x0181, 0x0180, false, "Outside of Limberry Castle (Setup)" },
+    { 0x0182, 0x0181, true, "Outside of Limberry Castle" },
+    { 0x0183, 0x0182, true, "Outside of Limberry Castle (Victory)" },
+    { 0x0184, 0x0183, false, "Men of Odd Appearance (Setup)" },
+    { 0x0185, 0x0184, true, "Men of Odd Appearance" },
+    { 0x0186, 0x0185, false, "Elmdor II (Setup)" },
+    { 0x0187, 0x0186, true, "Elmdor II" },
+    { 0x0188, 0x0187, true, "Elmdor II (Ultima Demon Celia)" },
+    { 0x0189, 0x0188, true, "Elmdor II (Ultima Demon Lede)" },
+    { 0x018A, 0x0189, true, "Elmdor II (Victory)" },
+    { 0x018B, 0x018A, false, "Zalera (Setup)" },
+    { 0x018C, 0x018B, true, "Zalera" },
+    { 0x018D, 0x018C, true, "Zalera (Zalera, Meliadoul and Ramza talk)" },
+    { 0x018E, 0x018D, true, "Zalera (Meliadoul and Ramza talk)" },
+    { 0x018F, 0x018E, true, "Zalera (Victory)" },
+    // These 10 events are not referenced by a scenario
+    { 0x0190, 0x0000, false, "Random Battle Template (Setup)" },
+    { 0x0191, 0x0000, false, "Random Battle Template (Initiate)" },
+    { 0x0192, 0x0000, false, "Random Battle Template (Victory)" },
+    { 0x0193, 0x0000, false, "Empty" },
+    { 0x0194, 0x0000, false, "Game Over Event (Plays automatically upon Game Over)" },
+    { 0x0195, 0x0000, false, "Empty" },
+    { 0x0196, 0x0000, false, "Empty" },
+    { 0x0197, 0x0000, false, "Empty" },
+    { 0x0198, 0x0000, false, "Empty" },
+    { 0x0199, 0x0000, false, "Empty" },
+    // End of non-scenario events
+    { 0x019A, 0x018F, false, "Tutorial - (Battlefield Control) (Setup)" },
+    { 0x019B, 0x0190, true, "Tutorial - (Battlefield Control)" },
+    { 0x019C, 0x0191, false, "Tutorial - (Battle) (Setup)" },
+    { 0x019D, 0x0192, true, "Tutorial - (Battle)" },
+    { 0x019E, 0x0193, false, "Tutorial - (Move and Act) (Setup)" },
+    { 0x019F, 0x0194, true, "Tutorial - (Move and Act)" },
+    { 0x01A0, 0x0195, false, "Tutorial - (Charge Time Battle) (Setup)" },
+    { 0x01A1, 0x0196, true, "Tutorial - (Charge Time Battle)" },
+    { 0x01A2, 0x0197, false, "Tutorial - (How to Cast Spells) (Setup)" },
+    { 0x01A3, 0x0198, true, "Tutorial - (How to Cast Spells)" },
+    { 0x01A4, 0x0199, false, "Tutorial - (Abnormal Status) (Setup)" },
+    { 0x01A5, 0x019A, true, "Tutorial - (Abnormal Status)" },
+    { 0x01A6, 0x019B, false, "Tutorial - (On-Line Help) (Setup)" },
+    { 0x01A7, 0x019C, true, "Tutorial - (On-Line Help)" },
+    { 0x01A8, 0x019D, false, "Tutorial - (Options) (Setup)" },
+    { 0x01A9, 0x019E, true, "Tutorial - (Options)" },
+    { 0x01AA, 0x019F, false, "The Mystery of Lucavi (Setup)" },
+    { 0x01AB, 0x01A0, true, "The Mystery of Lucavi" },
+    { 0x01AC, 0x01A1, false, "Delita's Betrayal (Setup)" },
+    { 0x01AD, 0x01A2, true, "Delita's Betrayal" },
+    { 0x01AE, 0x01A3, true, "Delita's Betrayal" },
+    { 0x01AF, 0x01A4, false, "Mosfungus (Setup)" },
+    { 0x01B0, 0x01A5, true, "Mosfungus" },
+    { 0x01B1, 0x01A6, false, "At the Gate of the Beoulve Castle (Setup)" },
+    { 0x01B2, 0x01A7, true, "At the Gate of the Beoulve Castle" },
+    { 0x01B3, 0x01A8, false, "Adramelk (Setup)" },
+    { 0x01B4, 0x01A9, true, "Adramelk" },
+    { 0x01B5, 0x01AA, true, "Adramelk (Zalbag and Ramza talk)" },
+    { 0x01B6, 0x01AB, true, "Adramelk (Dycedarg and Zalbag talk)" },
+    { 0x01B7, 0x01AC, true, "Adramelk (Here comes Adramelk)" },
+    { 0x01B8, 0x01AD, true, "Adramelk (Victory)" },
+    { 0x01B9, 0x01AE, false, "Funeral's Final Moments (Setup)" },
+    { 0x01BA, 0x01AF, true, "Funeral's Final Moments" },
+    { 0x01BB, 0x01B0, false, "St. Murond Temple (Setup)" },
+    { 0x01BC, 0x01B1, true, "St. Murond Temple" },
+    { 0x01BD, 0x01B2, true, "St. Murond Temple (Victory)" },
+    { 0x01BE, 0x01B3, false, "Hall of St. Murond Temple (Setup)" },
+    { 0x01BF, 0x01B4, true, "Hall of St. Murond Temple" },
+    { 0x01C0, 0x01B5, true, "Hall of St. Murond Temple (Vormav and Meliadoul talk)" },
+    { 0x01C1, 0x01B6, true, "Hall of St. Murond Temple (Vormav and Ramza talk)" },
+    { 0x01C2, 0x01B7, true, "Hall of St. Murond Temple (Victory)" },
+    { 0x01C3, 0x01B8, false, "Chapel of St. Murond Temple (Setup)" },
+    { 0x01C4, 0x01B9, true, "Chapel of St. Murond Temple" },
+    { 0x01C5, 0x01BA, true, "Chapel of St. Murond Temple (Zalbag, Ramza first turn)" },
+    { 0x01C6, 0x01BB, true, "Chapel of St. Murond Temple (Ramza, Zalbag 50% HP talk)" },
+    { 0x01C7, 0x01BC, true, "Chapel of St. Murond Temple (Victory)" },
+    { 0x01C8, 0x01BD, false, "Requiem (Setup)" },
+    { 0x01C9, 0x01BE, true, "Requiem" },
+    { 0x01CA, 0x01BF, false, "Zarghidas (Setup)" },
+    { 0x01CB, 0x01C0, true, "Zarghidas (Options Given)" },
+    { 0x01CC, 0x01C1, true, "Zarghidas (Don't Buy Flower Chosen)" },
+    { 0x01CD, 0x01C2, true, "Zarghidas (Buy Flower Chosen)" },
+    { 0x01CE, 0x01C3, false, "Bar - Deep Dungeon (Setup)" },
+    { 0x01CF, 0x01C4, true, "Bar - Deep Dungeon" },
+    { 0x01D0, 0x01C5, false, "Bar - Goland Coal City (Setup)" },
+    { 0x01D1, 0x01C6, true, "Bar - Goland Coal City (Options Given)" },
+    { 0x01D2, 0x01C7, true, "Bar - Goland Coal City (Refuse Beowulf's Invitation Chosen)" },
+    { 0x01D3, 0x01C8, true, "Bar - Goland Coal City (Accept Beowulf's invitation Chosen)" },
+    { 0x01D4, 0x01C9, false, "Colliery Underground - Third Floor (Setup)" },
+    { 0x01D5, 0x01CA, false, "Colliery Underground - Third Floor (Battle)" },
+    { 0x01D6, 0x01CB, false, "Colliery Underground - Third Floor (Victory)" },
+    { 0x01D7, 0x01CC, false, "Colliery Underground - Second Floor (Setup)" },
+    { 0x01D8, 0x01CD, false, "Colliery Underground - Second Floor (Battle)" },
+    { 0x01D9, 0x01CE, false, "Colliery Underground - Second Floor (Victory)" },
+    { 0x01DA, 0x01CF, false, "Colliery Underground - First Floor (Setup)" },
+    { 0x01DB, 0x01D0, false, "Colliery Underground - First Floor (Battle)" },
+    { 0x01DC, 0x01D1, false, "Colliery Underground - First Floor (Victory)" },
+    { 0x01DD, 0x01D2, false, "Underground Passage in Goland (Setup)" },
+    { 0x01DE, 0x01D3, true, "Underground Passage in Goland (Battle)" },
+    { 0x01DF, 0x01D4, true, "Underground Passage in Goland (Reis's Death, Beowulf Alive)" },
+    { 0x01E0, 0x01D5, false, "Underground Passage in Goland (Reis's Death, Beowulf KO'd)" },
+    { 0x01E1, 0x01D6, false, "Underground Passage in Goland (Victory)" },
+    { 0x01E2, 0x01D7, false, "Underground Passage in Goland (Setup)" },
+    { 0x01E3, 0x01D8, true, "Underground Passage in Goland (Post-Battle)" },
+    { 0x01E4, 0x01D9, false, "Nelveska Temple (Setup)" },
+    { 0x01E5, 0x01DA, true, "Nelveska Temple" },
+    { 0x01E6, 0x01DB, true, "Nelveska Temple (Worker 7 recharging)" },
+    { 0x01E7, 0x01DC, true, "Nelveska Temple (Victory)" },
+    { 0x01E8, 0x01DD, false, "Reis Curse (Setup)" },
+    { 0x01E9, 0x01DE, true, "Reis Curse" },
+    { 0x01EA, 0x01DF, true, "Bethla Sluice (Late add-in Ramza hint)" },
 };
 
 #endif // FFT_IMPLEMENTATION
