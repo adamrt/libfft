@@ -29,9 +29,9 @@ int main() {
     fft_init("fft.bin");
     
     // Read game data
-    fft_span_t battle_data = fft_io_open(F_BATTLE_BIN);
-    // ... process data
-    fft_io_close(battle_data);
+    fft_map_data_t* map_data = fft_map_data_read(49);
+    do_something_with_map(map_data);
+    fft_map_data_destroy(map_data);
     
     // Clean up
     fft_shutdown();
@@ -51,6 +51,13 @@ This creates two executables:
 - `fft_export_images` - Tool for extracting game images
 - `fft_debug` - Debug/testing tool not for general consumption
 
+## Testing
+
+Run the test suite
+
+```bash
+./build.sh test
+```
 
 ## Limitations
 

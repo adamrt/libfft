@@ -50,7 +50,11 @@ USAGE
 
         int main() {
             fft_init("my_fft_file.bin");
-            fft_do_thing(...);
+
+            fft_map_data_t* map_data = fft_map_data_read(49);
+            do_something_with_map(map_data);
+            fft_map_data_destroy(map_data);
+
             fft_shutdown();
         }
         ```
