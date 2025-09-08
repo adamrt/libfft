@@ -874,7 +874,6 @@ images. Map textures and sprites often use CLUTs to define the colors used in
 the image. Each CLUT is a set of colors that can be indexed by the image data.
 
 ================================================================================
-
 */
 
 enum {
