@@ -623,7 +623,7 @@ weather and layout. Each resource has a specified state.
 The default state is:
   - Time: FFT_TIME_DAY
   - Weather: FFT_WEATHER_NONE
-  - Layout: 0
+  - Layout: FFT_LAYOUT_DEFAULT
 
 Reference: https://ffhacktics.com/wiki/Maps/GNS
 
@@ -676,6 +676,8 @@ bool fft_state_is_equal(fft_state_t a, fft_state_t b);
 bool fft_state_is_default(fft_state_t map_state);
 
 // String representations of the enums
+const char* fft_gns_unknown_str(fft_gns_unknown_e value);
+const char* fft_layout_str(fft_layout_e value);
 const char* fft_time_str(fft_time_e value);
 const char* fft_weather_str(fft_weather_e value);
 
@@ -1907,8 +1909,21 @@ Map state Implementation
 static fft_state_t fft_default_state = (fft_state_t) {
     .time = FFT_TIME_DAY,
     .weather = FFT_WEATHER_NONE,
-    .layout = 0,
+    .layout = FFT_LAYOUT_DEFAULT,
 };
+
+const char* fft_gns_unknown_str(fft_gns_unknown_e value) {
+    switch (value) {
+    case FFT_GNS_UNKNOWN_0x22:
+        return "0x22";
+    case FFT_GNS_UNKNOWN_0x30:
+        return "0x30";
+    case FFT_GNS_UNKNOWN_0x70:
+        return "0x70";
+    default:
+        return "Unknown";
+    }
+}
 
 static void validate_gns_unknown(fft_gns_unknown_e value) {
     switch (value) {
@@ -1918,6 +1933,25 @@ static void validate_gns_unknown(fft_gns_unknown_e value) {
         return;
     default:
         FFT_ASSERT(false, "Invalid GNS unknown value: %d", value);
+    }
+}
+
+const char* fft_layout_str(fft_layout_e value) {
+    switch (value) {
+    case FFT_LAYOUT_DEFAULT:
+        return "Default";
+    case FFT_LAYOUT_ALTERNATE_A:
+        return "Alternate A";
+    case FFT_LAYOUT_ALTERNATE_B:
+        return "Alternate B";
+    case FFT_LAYOUT_ALTERNATE_C:
+        return "Alternate C";
+    case FFT_LAYOUT_ALTERNATE_D:
+        return "Alternate D";
+    case FFT_LAYOUT_ALTERNATE_E:
+        return "Alternate E";
+    default:
+        return "Unknown";
     }
 }
 
