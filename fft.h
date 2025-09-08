@@ -2562,7 +2562,7 @@ static uint32_t read_tile_locations(fft_span_t* span, fft_geometry_t* g, uint32_
 
         // Split single byte values
         uint8_t y = (z_and_y >> 0) & 0x01; // 0b00000001
-        uint8_t z = (z_and_y >> 1) & 0xFE; // 0b11111110
+        uint8_t z = (z_and_y >> 1) & 0x7F; // 0b11111110
 
         // Populate the polygon's tile info.
         fft_polygon_t* poly = &g->polygons[poly_offset + i];
