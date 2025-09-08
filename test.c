@@ -314,17 +314,17 @@ static int test_recordtype_str(void) {
 
 static int test_state_functions(void) {
     // Test default state
-    fft_state_t default_state = { FFT_TIME_DAY, FFT_WEATHER_NONE, 0 };
+    fft_state_t default_state = { FFT_TIME_DAY, FFT_WEATHER_NONE, FFT_LAYOUT_DEFAULT };
     TEST_ASSERT(fft_state_is_default(default_state), "default state is recognized");
 
     // Test non-default states
-    fft_state_t night_state = { FFT_TIME_NIGHT, FFT_WEATHER_NONE, 0 };
+    fft_state_t night_state = { FFT_TIME_NIGHT, FFT_WEATHER_NONE, FFT_LAYOUT_DEFAULT };
     TEST_ASSERT(!fft_state_is_default(night_state), "night state is not default");
 
-    fft_state_t weather_state = { FFT_TIME_DAY, FFT_WEATHER_NORMAL, 0 };
+    fft_state_t weather_state = { FFT_TIME_DAY, FFT_WEATHER_NORMAL, FFT_LAYOUT_DEFAULT };
     TEST_ASSERT(!fft_state_is_default(weather_state), "weather state is not default");
 
-    fft_state_t layout_state = { FFT_TIME_DAY, FFT_WEATHER_NONE, 1 };
+    fft_state_t layout_state = { FFT_TIME_DAY, FFT_WEATHER_NONE, FFT_LAYOUT_ALTERNATE_A };
     TEST_ASSERT(!fft_state_is_default(layout_state), "layout state is not default");
 
     // Test state equality

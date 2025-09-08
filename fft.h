@@ -630,6 +630,23 @@ Reference: https://ffhacktics.com/wiki/Maps/GNS
 ================================================================================
 */
 
+// This is alternate room layout used by some maps.
+// This can be with/without chairs for example.
+typedef enum {
+    FFT_LAYOUT_DEFAULT = 0,
+    FFT_LAYOUT_ALTERNATE_A = 1,
+    FFT_LAYOUT_ALTERNATE_B = 2,
+    FFT_LAYOUT_ALTERNATE_C = 3,
+    FFT_LAYOUT_ALTERNATE_D = 4,
+    FFT_LAYOUT_ALTERNATE_E = 5,
+} fft_layout_e;
+
+typedef enum {
+    FFT_GNS_UNKNOWN_0x22 = 0x22,
+    FFT_GNS_UNKNOWN_0x30 = 0x30,
+    FFT_GNS_UNKNOWN_0x70 = 0x70,
+} fft_gns_unknown_e;
+
 typedef enum {
     FFT_TIME_DAY = 0x0,
     FFT_TIME_NIGHT = 0x1,
@@ -651,7 +668,7 @@ typedef enum {
 typedef struct {
     fft_time_e time;
     fft_weather_e weather;
-    int32_t layout;
+    fft_layout_e layout;
 } fft_state_t;
 
 // Comparative functions for fft_state_t
@@ -681,20 +698,20 @@ We don't know the number of records ahead of time, so we read each one until the
 type is FFT_RECORDTYPE_END.
 
 Format: AA BC DD EE FF GG HH HH II JJ
-+------+---------+-------+--------------------------------------+
-| Pos  | Size    | Index | Description                          |
-+------+---------+-------+--------------------------------------+
-| AA   | 2 bytes |   0-1 | unknown, always 0x22, 0x30 or 0x70   |
-| B    | 1 bytes |     2 | room layout                          |
-| C    | 1 bytes |     3 | fft_time_e and fft_weather_e         |
-| DD   | 2 bytes |   4-5 | fft_recordtype_e                     |
-| EE   | 2 bytes |   6-7 | unknown                              |
-| FF   | 2 bytes |   8-9 | start sector                         |
-| GG   | 2 bytes | 10-11 | unknown                              |
-| HHHH | 4 bytes | 12-15 | resource size                        |
-| II   | 2 bytes | 16-17 | unknown                              |
-| JJ   | 2 bytes | 18-19 | unknown                              |
-+------+---------+-------+--------------------------------------+
++------+--------+------+----------------------------------------+
+| Name | Offset | Size | Description                            |
++------+--------+------+----------------------------------------+
+| AA   |      0 |    2 | fft_gns_unknown_e                      |
+| B    |      2 |    1 | fft_layout_e                           |
+| C    |      3 |    1 | fft_time_e and fft_weather_e           |
+| DD   |      4 |    2 | fft_recordtype_e                       |
+| EE   |      6 |    2 | unknown                                |
+| FF   |      8 |    2 | start sector                           |
+| GG   |     10 |    2 | unknown                                |
+| HHHH |     12 |    4 | resource size                          |
+| II   |     16 |    2 | unknown                                |
+| JJ   |     18 |    2 | unknown                                |
++------+--------+------+----------------------------------------+
 
 Reference: https://ffhacktics.com/wiki/Maps/GNS
 
@@ -745,7 +762,7 @@ typedef struct {
     uint32_t length;
 
     // Padding or unknown fields
-    uint16_t unknown_aa;
+    fft_gns_unknown_e gns_unknown_aa;
     uint16_t unknown_ee;
     uint16_t unknown_gg;
     uint16_t unknown_ii;
@@ -1459,25 +1476,25 @@ value of 16 (0b00010000 / 0x10). I assume this is because the 4 high bits are
 used for some other purpose but I'm not sure yet.
 
 Format: AA BC DE FG GH HI IJ JJ JK LL MN OO
-+------+---------+-------+------------------------------------------+
-| Pos  | Size    | Index | Description                              |
-+------+---------+-------+------------------------------------------+
-| AA   | 2 bytes |   0-1 | event_id.                                |
-| B    | 1 bytes |     2 | map_id                                   |
-| C    | 1 bytes |     3 | fft_weather_e & FFT_WEATHER_UNKNOWN_0x10 |
-| D    | 1 bytes |     4 | fft_time_e                               |
-| E    | 1 bytes |     5 | music_file_first                         |
-| F    | 1 bytes |     6 | music_file_second                        |
-| GG   | 2 bytes |   7-8 | entd_id                                  |
-| HH   | 2 bytes |  9-10 | grid_first (ATTACK.OUT at 0xBBD4)        |
-| II   | 2 bytes | 11-12 | grid_second                              |
-| JJJJ | 4 bytes | 13-16 | unknown_jjjj                             |
-| K    | 1 bytes |    17 | ramza_required                           |
-| LL   | 2 bytes | 18-19 | next_event_id                            |
-| M    | 1 bytes |    20 | fft_nextstep_e                           |
-| N    | 1 bytes |    21 | unknown_n                                |
-| OO   | 2 bytes | 22-23 | script_id                                |
-+------+---------+-------+------------------------------------------+
++------+--------+------+-------------------+
+| Pos  | Offset | Size | Description       |
++------+--------+------+-------------------+
+| AA   | 0      |    2 | event_id          |
+| B    | 2      |    1 | map_id            |
+| C    | 3      |    1 | fft_weather_e     |
+| D    | 4      |    1 | fft_time_e        |
+| E    | 5      |    1 | music_file_first  |
+| F    | 6      |    1 | music_file_second |
+| GG   | 7      |    2 | entd_id           |
+| HH   | 9      |    2 | grid_first        |
+| II   | 11     |    2 | grid_second       |
+| JJJJ | 13     |    4 | unknown_jjjj      |
+| K    | 17     |    1 | ramza_required    |
+| LL   | 18     |    2 | next_event_id     |
+| M    | 20     |    1 | fft_nextstep_e    |
+| N    | 21     |    1 | unknown_n         |
+| OO   | 22     |    2 | script_id         |
++------+--------+------+-------------------+
 
 Reference: https://ffhacktics.com/wiki/ATTACK.OUT
 
@@ -1893,6 +1910,31 @@ static fft_state_t fft_default_state = (fft_state_t) {
     .layout = 0,
 };
 
+static void validate_gns_unknown(fft_gns_unknown_e value) {
+    switch (value) {
+    case FFT_GNS_UNKNOWN_0x22:
+    case FFT_GNS_UNKNOWN_0x30:
+    case FFT_GNS_UNKNOWN_0x70:
+        return;
+    default:
+        FFT_ASSERT(false, "Invalid GNS unknown value: %d", value);
+    }
+}
+
+static void validate_layout(fft_layout_e value) {
+    switch (value) {
+    case FFT_LAYOUT_DEFAULT:
+    case FFT_LAYOUT_ALTERNATE_A:
+    case FFT_LAYOUT_ALTERNATE_B:
+    case FFT_LAYOUT_ALTERNATE_C:
+    case FFT_LAYOUT_ALTERNATE_D:
+    case FFT_LAYOUT_ALTERNATE_E:
+        return;
+    default:
+        FFT_ASSERT(false, "Invalid layout value: %d", value);
+    }
+}
+
 const char* fft_time_str(fft_time_e value) {
     switch (value) {
     case FFT_TIME_DAY:
@@ -1961,23 +2003,29 @@ GNS/Records Implementation
 */
 
 static fft_record_t fft_record_read(fft_span_t* span) {
-    uint16_t unknown_aa = fft_span_read_u16(span);     // 0
-    uint8_t layout = fft_span_read_u8(span);           // 1-2
-    uint8_t time_and_weather = fft_span_read_u8(span); // 3
-    fft_recordtype_e type = fft_span_read_u16(span);   // 4-5
-    uint16_t unknown_ee = fft_span_read_u16(span);     // 6-7
-    uint32_t sector = fft_span_read_u16(span);         // 8-9
-    uint16_t unknown_gg = fft_span_read_u16(span);     // 10-11
-    uint32_t length = fft_span_read_u32(span);         // 12-15
-    uint16_t unknown_ii = fft_span_read_u16(span);     // 16-17
-    uint16_t unknown_jj = fft_span_read_u16(span);     // 18-19
+    uint16_t raw_gns_unknown = fft_span_read_u16(span);    // 0
+    uint8_t raw_layout = fft_span_read_u8(span);           // 1-2
+    uint8_t raw_time_and_weather = fft_span_read_u8(span); // 3
+    fft_recordtype_e type = fft_span_read_u16(span);       // 4-5
+    uint16_t unknown_ee = fft_span_read_u16(span);         // 6-7
+    uint32_t sector = fft_span_read_u16(span);             // 8-9
+    uint16_t unknown_gg = fft_span_read_u16(span);         // 10-11
+    uint32_t length = fft_span_read_u32(span);             // 12-15
+    uint16_t unknown_ii = fft_span_read_u16(span);         // 16-17
+    uint16_t unknown_jj = fft_span_read_u16(span);         // 18-19
+
+    fft_gns_unknown_e gns_unknown_aa = (fft_gns_unknown_e)raw_gns_unknown;
+    validate_gns_unknown(gns_unknown_aa);
+
+    fft_layout_e layout = (fft_layout_e)raw_layout;
+    validate_layout(layout);
 
     // Split time and weather from single byte.
     // - time    = 0b10000000
     // - weather = 0b01110000
-    fft_time_e time = (fft_time_e)((time_and_weather >> 7) & 0x1);
+    fft_time_e time = (fft_time_e)((raw_time_and_weather >> 7) & 0x1);
     validate_time(time);
-    fft_weather_e weather = (fft_weather_e)((time_and_weather >> 4) & 0x7);
+    fft_weather_e weather = (fft_weather_e)((raw_time_and_weather >> 4) & 0x7);
     validate_weather(weather);
 
     fft_record_t record = {
@@ -1989,7 +2037,7 @@ static fft_record_t fft_record_read(fft_span_t* span) {
             .weather = weather,
             .layout = layout,
         },
-        .unknown_aa = unknown_aa,
+        .gns_unknown_aa = gns_unknown_aa,
         .unknown_ee = unknown_ee,
         .unknown_gg = unknown_gg,
         .unknown_ii = unknown_ii,
