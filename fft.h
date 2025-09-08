@@ -642,12 +642,6 @@ typedef enum {
 } fft_layout_e;
 
 typedef enum {
-    FFT_GNS_UNKNOWN_0x22 = 0x22,
-    FFT_GNS_UNKNOWN_0x30 = 0x30,
-    FFT_GNS_UNKNOWN_0x70 = 0x70,
-} fft_gns_unknown_e;
-
-typedef enum {
     FFT_TIME_DAY = 0x0,
     FFT_TIME_NIGHT = 0x1,
 } fft_time_e;
@@ -676,7 +670,6 @@ bool fft_state_is_equal(fft_state_t a, fft_state_t b);
 bool fft_state_is_default(fft_state_t map_state);
 
 // String representations of the enums
-const char* fft_gns_unknown_str(fft_gns_unknown_e value);
 const char* fft_layout_str(fft_layout_e value);
 const char* fft_time_str(fft_time_e value);
 const char* fft_weather_str(fft_weather_e value);
@@ -726,6 +719,12 @@ enum {
 };
 
 typedef enum {
+    FFT_RECORD_UNKNOWN_0x22 = 0x22,
+    FFT_RECORD_UNKNOWN_0x30 = 0x30,
+    FFT_RECORD_UNKNOWN_0x70 = 0x70,
+} fft_record_unknown_e;
+
+typedef enum {
     FFT_RECORDTYPE_NONE = 0x0000,
     FFT_RECORDTYPE_TEXTURE = 0x1701,
     FFT_RECORDTYPE_MESH_PRIMARY = 0x2E01,
@@ -734,6 +733,7 @@ typedef enum {
     FFT_RECORDTYPE_END = 0x3101, // End of file marker
 } fft_recordtype_e;
 
+const char* fft_record_unknown_str(fft_record_unknown_e value);
 const char* fft_recordtype_str(fft_recordtype_e value);
 
 // This is used to store metadata for the record, after reading the related
@@ -764,7 +764,7 @@ typedef struct {
     uint32_t length;
 
     // Padding or unknown fields
-    fft_gns_unknown_e gns_unknown_aa;
+    fft_record_unknown_e gns_unknown_aa;
     uint16_t unknown_ee;
     uint16_t unknown_gg;
     uint16_t unknown_ii;
@@ -1912,30 +1912,6 @@ static fft_state_t fft_default_state = (fft_state_t) {
     .layout = FFT_LAYOUT_DEFAULT,
 };
 
-const char* fft_gns_unknown_str(fft_gns_unknown_e value) {
-    switch (value) {
-    case FFT_GNS_UNKNOWN_0x22:
-        return "0x22";
-    case FFT_GNS_UNKNOWN_0x30:
-        return "0x30";
-    case FFT_GNS_UNKNOWN_0x70:
-        return "0x70";
-    default:
-        return "Unknown";
-    }
-}
-
-static void validate_gns_unknown(fft_gns_unknown_e value) {
-    switch (value) {
-    case FFT_GNS_UNKNOWN_0x22:
-    case FFT_GNS_UNKNOWN_0x30:
-    case FFT_GNS_UNKNOWN_0x70:
-        return;
-    default:
-        FFT_ASSERT(false, "Invalid GNS unknown value: %d", value);
-    }
-}
-
 const char* fft_layout_str(fft_layout_e value) {
     switch (value) {
     case FFT_LAYOUT_DEFAULT:
@@ -2036,6 +2012,30 @@ GNS/Records Implementation
 ================================================================================
 */
 
+const char* fft_record_unknown_str(fft_record_unknown_e value) {
+    switch (value) {
+    case FFT_RECORD_UNKNOWN_0x22:
+        return "0x22";
+    case FFT_RECORD_UNKNOWN_0x30:
+        return "0x30";
+    case FFT_RECORD_UNKNOWN_0x70:
+        return "0x70";
+    default:
+        return "Unknown";
+    }
+}
+
+static void validate_gns_unknown(fft_record_unknown_e value) {
+    switch (value) {
+    case FFT_RECORD_UNKNOWN_0x22:
+    case FFT_RECORD_UNKNOWN_0x30:
+    case FFT_RECORD_UNKNOWN_0x70:
+        return;
+    default:
+        FFT_ASSERT(false, "Invalid Record unknown value: %d", value);
+    }
+}
+
 static fft_record_t fft_record_read(fft_span_t* span) {
     uint16_t raw_gns_unknown = fft_span_read_u16(span);    // 0
     uint8_t raw_layout = fft_span_read_u8(span);           // 1-2
@@ -2048,7 +2048,7 @@ static fft_record_t fft_record_read(fft_span_t* span) {
     uint16_t unknown_ii = fft_span_read_u16(span);         // 16-17
     uint16_t unknown_jj = fft_span_read_u16(span);         // 18-19
 
-    fft_gns_unknown_e gns_unknown_aa = (fft_gns_unknown_e)raw_gns_unknown;
+    fft_record_unknown_e gns_unknown_aa = (fft_record_unknown_e)raw_gns_unknown;
     validate_gns_unknown(gns_unknown_aa);
 
     fft_layout_e layout = (fft_layout_e)raw_layout;
