@@ -1255,70 +1255,70 @@ enum {
     FFT_TERRAIN_STR_SIZE = 128
 };
 
-#define FFT_TERRAIN_SURFACE_INDEX                       \
-    X(SURFACE_NATURAL_SURFACE, 0x00, "Natural Surface") \
-    X(SURFACE_SAND, 0x01, "Sand")                       \
-    X(SURFACE_STALACTITE, 0x02, "Stalactite")           \
-    X(SURFACE_GRASSLAND, 0x03, "Grassland")             \
-    X(SURFACE_THICKET, 0x04, "Thicket")                 \
-    X(SURFACE_SNOW, 0x05, "Snow")                       \
-    X(SURFACE_ROCKY_CLIFF, 0x06, "Rocky Cliff")         \
-    X(SURFACE_GRAVEL, 0x07, "Gravel")                   \
-    X(SURFACE_WASTELAND, 0x08, "Wasteland")             \
-    X(SURFACE_SWAMP, 0x09, "Swamp")                     \
-    X(SURFACE_MARSH, 0x0A, "Marsh")                     \
-    X(SURFACE_POISONED_MARSH, 0x0B, "Poisoned Marsh")   \
-    X(SURFACE_LAVA_ROCKS, 0x0C, "Lava Rocks")           \
-    X(SURFACE_ICE, 0x0D, "Ice")                         \
-    X(SURFACE_WATERWAY, 0x0E, "Waterway")               \
-    X(SURFACE_RIVER, 0x0F, "River")                     \
-    X(SURFACE_LAKE, 0x10, "Lake")                       \
-    X(SURFACE_SEA, 0x11, "Sea")                         \
-    X(SURFACE_LAVA, 0x12, "Lava")                       \
-    X(SURFACE_ROAD, 0x13, "Road")                       \
-    X(SURFACE_WOODEN_FLOOR, 0x14, "Wooden Floor")       \
-    X(SURFACE_STONE_FLOOR, 0x15, "Stone Floor")         \
-    X(SURFACE_ROOF, 0x16, "Roof")                       \
-    X(SURFACE_STONEWALL, 0x17, "Stonewall")             \
-    X(SURFACE_SKY, 0x18, "Sky")                         \
-    X(SURFACE_DARKNESS, 0x19, "Darkness")               \
-    X(SURFACE_SALT, 0x1A, "Salt")                       \
-    X(SURFACE_BOOK, 0x1B, "Book")                       \
-    X(SURFACE_OBSTACLE, 0x1C, "Obstacle")               \
-    X(SURFACE_RUG, 0x1D, "Rug")                         \
-    X(SURFACE_TREE, 0x1E, "Tree")                       \
-    X(SURFACE_BOX, 0x1F, "Box")                         \
-    X(SURFACE_BRICK, 0x20, "Brick")                     \
-    X(SURFACE_CHIMNEY, 0x21, "Chimney")                 \
-    X(SURFACE_MUD_WALL, 0x22, "Mud Wall")               \
-    X(SURFACE_BRIDGE, 0x23, "Bridge")                   \
-    X(SURFACE_WATER_PLANT, 0x24, "Water Plant")         \
-    X(SURFACE_STAIRS, 0x25, "Stairs")                   \
-    X(SURFACE_FURNITURE, 0x26, "Furniture")             \
-    X(SURFACE_IVY, 0x27, "Ivy")                         \
-    X(SURFACE_DECK, 0x28, "Deck")                       \
-    X(SURFACE_MACHINE, 0x29, "Machine")                 \
-    X(SURFACE_IRON_PLATE, 0x2A, "Iron Plate")           \
-    X(SURFACE_MOSS, 0x2B, "Moss")                       \
-    X(SURFACE_TOMBSTONE, 0x2C, "Tombstone")             \
-    X(SURFACE_WATERFALL, 0x2D, "Waterfall")             \
-    X(SURFACE_COFFIN, 0x2E, "Coffin")                   \
-    X(SURFACE_CROSS_SECTION, 0x3F, "Cross Section")
+#define FFT_TERRAIN_SURFACE_INDEX                           \
+    X(FFT_SURFACE_NATURAL_SURFACE, 0x00, "Natural Surface") \
+    X(FFT_SURFACE_SAND, 0x01, "Sand")                       \
+    X(FFT_SURFACE_STALACTITE, 0x02, "Stalactite")           \
+    X(FFT_SURFACE_GRASSLAND, 0x03, "Grassland")             \
+    X(FFT_SURFACE_THICKET, 0x04, "Thicket")                 \
+    X(FFT_SURFACE_SNOW, 0x05, "Snow")                       \
+    X(FFT_SURFACE_ROCKY_CLIFF, 0x06, "Rocky Cliff")         \
+    X(FFT_SURFACE_GRAVEL, 0x07, "Gravel")                   \
+    X(FFT_SURFACE_WASTELAND, 0x08, "Wasteland")             \
+    X(FFT_SURFACE_SWAMP, 0x09, "Swamp")                     \
+    X(FFT_SURFACE_MARSH, 0x0A, "Marsh")                     \
+    X(FFT_SURFACE_POISONED_MARSH, 0x0B, "Poisoned Marsh")   \
+    X(FFT_SURFACE_LAVA_ROCKS, 0x0C, "Lava Rocks")           \
+    X(FFT_SURFACE_ICE, 0x0D, "Ice")                         \
+    X(FFT_SURFACE_WATERWAY, 0x0E, "Waterway")               \
+    X(FFT_SURFACE_RIVER, 0x0F, "River")                     \
+    X(FFT_SURFACE_LAKE, 0x10, "Lake")                       \
+    X(FFT_SURFACE_SEA, 0x11, "Sea")                         \
+    X(FFT_SURFACE_LAVA, 0x12, "Lava")                       \
+    X(FFT_SURFACE_ROAD, 0x13, "Road")                       \
+    X(FFT_SURFACE_WOODEN_FLOOR, 0x14, "Wooden Floor")       \
+    X(FFT_SURFACE_STONE_FLOOR, 0x15, "Stone Floor")         \
+    X(FFT_SURFACE_ROOF, 0x16, "Roof")                       \
+    X(FFT_SURFACE_STONEWALL, 0x17, "Stonewall")             \
+    X(FFT_SURFACE_SKY, 0x18, "Sky")                         \
+    X(FFT_SURFACE_DARKNESS, 0x19, "Darkness")               \
+    X(FFT_SURFACE_SALT, 0x1A, "Salt")                       \
+    X(FFT_SURFACE_BOOK, 0x1B, "Book")                       \
+    X(FFT_SURFACE_OBSTACLE, 0x1C, "Obstacle")               \
+    X(FFT_SURFACE_RUG, 0x1D, "Rug")                         \
+    X(FFT_SURFACE_TREE, 0x1E, "Tree")                       \
+    X(FFT_SURFACE_BOX, 0x1F, "Box")                         \
+    X(FFT_SURFACE_BRICK, 0x20, "Brick")                     \
+    X(FFT_SURFACE_CHIMNEY, 0x21, "Chimney")                 \
+    X(FFT_SURFACE_MUD_WALL, 0x22, "Mud Wall")               \
+    X(FFT_SURFACE_BRIDGE, 0x23, "Bridge")                   \
+    X(FFT_SURFACE_WATER_PLANT, 0x24, "Water Plant")         \
+    X(FFT_SURFACE_STAIRS, 0x25, "Stairs")                   \
+    X(FFT_SURFACE_FURNITURE, 0x26, "Furniture")             \
+    X(FFT_SURFACE_IVY, 0x27, "Ivy")                         \
+    X(FFT_SURFACE_DECK, 0x28, "Deck")                       \
+    X(FFT_SURFACE_MACHINE, 0x29, "Machine")                 \
+    X(FFT_SURFACE_IRON_PLATE, 0x2A, "Iron Plate")           \
+    X(FFT_SURFACE_MOSS, 0x2B, "Moss")                       \
+    X(FFT_SURFACE_TOMBSTONE, 0x2C, "Tombstone")             \
+    X(FFT_SURFACE_WATERFALL, 0x2D, "Waterfall")             \
+    X(FFT_SURFACE_COFFIN, 0x2E, "Coffin")                   \
+    X(FFT_SURFACE_CROSS_SECTION, 0x3F, "Cross Section")
 
-#define FFT_TERRAIN_SLOPE_INDEX             \
-    X(SLOPE_FLAT, 0x00, "Flat")             \
-    X(SLOPE_INCLINE_N, 0x85, "Incline N")   \
-    X(SLOPE_INCLINE_E, 0x52, "Incline E")   \
-    X(SLOPE_INCLINE_S, 0x25, "Incline S")   \
-    X(SLOPE_INCLINE_W, 0x58, "Incline W")   \
-    X(SLOPE_CONVEX_NE, 0x41, "Convex NE")   \
-    X(SLOPE_CONVEX_SE, 0x11, "Convex SE")   \
-    X(SLOPE_CONVEX_SW, 0x14, "Convex SW")   \
-    X(SLOPE_CONVEX_NW, 0x44, "Convex NW")   \
-    X(SLOPE_CONCAVE_NE, 0x96, "Concave NE") \
-    X(SLOPE_CONCAVE_SE, 0x66, "Concave SE") \
-    X(SLOPE_CONCAVE_SW, 0x69, "Concave SW") \
-    X(SLOPE_CONCAVE_NW, 0x99, "Concave NW")
+#define FFT_TERRAIN_SLOPE_INDEX                 \
+    X(FFT_SLOPE_FLAT, 0x00, "Flat")             \
+    X(FFT_SLOPE_INCLINE_N, 0x85, "Incline N")   \
+    X(FFT_SLOPE_INCLINE_E, 0x52, "Incline E")   \
+    X(FFT_SLOPE_INCLINE_S, 0x25, "Incline S")   \
+    X(FFT_SLOPE_INCLINE_W, 0x58, "Incline W")   \
+    X(FFT_SLOPE_CONVEX_NE, 0x41, "Convex NE")   \
+    X(FFT_SLOPE_CONVEX_SE, 0x11, "Convex SE")   \
+    X(FFT_SLOPE_CONVEX_SW, 0x14, "Convex SW")   \
+    X(FFT_SLOPE_CONVEX_NW, 0x44, "Convex NW")   \
+    X(FFT_SLOPE_CONCAVE_NE, 0x96, "Concave NE") \
+    X(FFT_SLOPE_CONCAVE_SE, 0x66, "Concave SE") \
+    X(FFT_SLOPE_CONCAVE_SW, 0x69, "Concave SW") \
+    X(FFT_SLOPE_CONCAVE_NW, 0x99, "Concave NW")
 
 typedef enum {
 #define X(oname, ovalue, ostring) oname = ovalue,
@@ -2697,7 +2697,7 @@ static fft_terrain_t fft_terrain_read(fft_span_t* span) {
                 tile.slope = (fft_terrain_slope_e)fft_span_read_u8(span);
                 fft_span_read_u8(span); // Padding
 
-                if (tile.slope == SLOPE_FLAT) {
+                if (tile.slope == FFT_SLOPE_FLAT) {
                     // Sloped height top should be 0 for flat tiles but some
                     // maps tiles set to 1. This should be researched further.
                     FFT_ASSERT(tile.sloped_height_top == 0 || tile.sloped_height_top == 1, "Flat tile has > 1 sloped height top");
