@@ -1476,8 +1476,9 @@ extern const fft_map_desc_t fft_map_list[FFT_MAP_DESC_LIST_COUNT];
 
 /*
 ================================================================================
-Scenario
+Scenarios
 ================================================================================
+
 Scenarios define the map, weather, time of day, and other properties for each
 scenario in the game. They are 24-byte records stored in ATTACK.OUT file. The
 records start at an offset of 0x10938 from the beginning of the file.
@@ -1550,12 +1551,14 @@ fft_scenario_t fft_scenario_get_scenario(uint32_t);
 
 /*
 ================================================================================
-Event
+Events
 ================================================================================
 
-Events
-
-Reference: https://github.com/Glain/FFTPatcher/blob/master/EntryEdit/EntryData/PSX/ScenarioNames.xml
+Events represent a sequence of instructions that are executed to create dynamic
+behaviors in the game. Each event consists of a series of opcodes, which are
+commands that dictate specific actions or operations to be performed. The
+opcodes can manipulate game elements such as characters, environments, and other
+interactive components.
 
 ================================================================================
 */
@@ -1595,6 +1598,7 @@ information needed to execute the operation.
 
 ================================================================================
 */
+
 enum {
     FFT_OPCODE_PARAM_MAX = 14,
 };
@@ -1761,6 +1765,47 @@ typedef struct {
 } fft_opcode_desc_t;
 
 extern const fft_opcode_desc_t fft_opcode_desc_list[];
+
+/*
+================================================================================
+Event Instructions
+================================================================================
+
+Instructions are the individual operations that make up an event script. Each
+instruction consists of an opcode and its associated parameters. The opcode
+determines the operation to be performed, while the parameters provide the
+necessary data for that operation.
+
+================================================================================
+*/
+
+enum {
+    FFT_INSTRUCTION_MAX = 768,
+};
+
+typedef enum {
+    FFT_PARAM_TYPE_NONE = 0,
+    FFT_PARAM_TYPE_U8 = 1,
+    FFT_PARAM_TYPE_U16 = 2,
+} fft_param_type_e;
+
+typedef struct {
+    fft_param_type_e type;
+    union {
+        uint8_t u8;
+        uint16_t u16;
+        int8_t i8;
+        int16_t i16;
+    } value;
+} fft_param_t;
+
+typedef struct {
+    fft_opcode_e opcode;
+    fft_param_t params[FFT_OPCODE_PARAM_MAX];
+    uint8_t param_count;
+} fft_instruction_t;
+
+uint16_t fft_instructions_read(fft_span_t*, fft_instruction_t*);
 
 #ifdef __cplusplus
 }
@@ -3134,7 +3179,7 @@ void fft_map_data_destroy(fft_map_data_t* map) {
 
 /*
 ================================================================================
-Battle Implementation
+Scenario Implementation
 ================================================================================
 */
 
@@ -3151,10 +3196,10 @@ static void validate_nextstep(fft_nextstep_e step) {
 }
 
 fft_scenario_t fft_scenario_get_scenario(uint32_t id) {
-    FFT_ASSERT(id < FFT_SCENARIO_COUNT, "Battle id %d out of bounds", id);
+    FFT_ASSERT(id < FFT_SCENARIO_COUNT, "Scenario id %d out of bounds", id);
     fft_span_t attack_out_file = fft_io_open(F_EVENT__ATTACK_OUT);
 
-    // Create a separate span view for this battle
+    // Create a separate span view for this scenario
     fft_span_t span = { 0 };
     span.data = attack_out_file.data + FFT_SCENARIO_OFFSET + (id * FFT_SCENARIO_SIZE);
     span.size = FFT_SCENARIO_SIZE;
@@ -3183,12 +3228,59 @@ fft_scenario_t fft_scenario_get_scenario(uint32_t id) {
     validate_nextstep(scenario.next_step);
 
     if (scenario.next_step == FFT_NEXTSTEP_EVENT) {
-        FFT_ASSERT(scenario.next_event_id != 0, "Battle with next step EVENT must have a next event id");
+        FFT_ASSERT(scenario.next_event_id != 0, "Scenario with next step EVENT must have a next event id");
     }
 
     fft_io_close(attack_out_file);
 
     return scenario;
+}
+
+/*
+================================================================================
+Event Opcodes Implementation
+================================================================================
+*/
+
+const fft_opcode_desc_t opcode_desc_list[] = {
+#define X(code, value, name, params, param_count) [code] = { value, name, params, param_count },
+    FFT_OPCODE_LIST
+#undef X
+};
+
+/*
+================================================================================
+Event Instructions Implementation
+================================================================================
+*/
+
+uint16_t fft_instructions_read(fft_span_t* span, fft_instruction_t* out_instructions) {
+    uint16_t count = 0;
+    while (span->offset < span->size) {
+        fft_opcode_e id = (fft_opcode_e)fft_span_read_u8(span);
+        fft_opcode_desc_t desc = opcode_desc_list[id];
+        fft_instruction_t instruction = {
+            .opcode = id
+        };
+
+        for (int i = 0; i < desc.param_count; i++) {
+            fft_param_t param = { 0 };
+            if (desc.param_sizes[i] == FFT_PARAM_TYPE_U16) {
+                param.type = FFT_PARAM_TYPE_U16;
+                param.value.u16 = fft_span_read_u16(span);
+            } else if (desc.param_sizes[i] == FFT_PARAM_TYPE_U8) {
+                param.type = FFT_PARAM_TYPE_U8;
+                param.value.u8 = fft_span_read_u8(span);
+            } else {
+                FFT_ASSERT(false, "Unknown param type %d %s", desc.param_sizes[i], desc.name);
+            }
+            instruction.params[i] = param;
+            instruction.param_count++;
+        }
+        out_instructions[count++] = instruction;
+        FFT_ASSERT(count < FFT_INSTRUCTION_MAX, "Instruction count exceeded");
+    }
+    return count;
 }
 
 /*
@@ -3849,12 +3941,6 @@ fft_event_desc_t fft_event_desc_list[FFT_EVENT_COUNT] = {
     { 0x01E8, 0x01DD, false, "Reis Curse (Setup)" },
     { 0x01E9, 0x01DE, true, "Reis Curse" },
     { 0x01EA, 0x01DF, true, "Bethla Sluice (Late add-in Ramza hint)" },
-};
-
-const fft_opcode_desc_t opcode_desc_list[] = {
-#define X(code, value, name, params, param_count) [code] = { value, name, params, param_count },
-    FFT_OPCODE_LIST
-#undef X
 };
 
 #endif // FFT_IMPLEMENTATION
