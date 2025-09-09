@@ -4,14 +4,16 @@
 #define FFT_IMPLEMENTATION
 #include "fft.h"
 
-void read_map_data(void);
 void read_scenarios(void);
+void read_map_data(void);
+void read_events(void);
 
 int main(void) {
     fft_init("../heretic/fft.bin");
     {
+        read_scenarios();
         read_map_data();
-        read_map_data();
+        read_events();
     }
     fft_shutdown();
 }
@@ -36,5 +38,16 @@ void read_scenarios(void) {
         }
         fft_scenario_t scenario = fft_scenario_get_scenario(desc.scenario_id);
         (void)scenario;
+    }
+}
+
+void read_events(void) {
+    for (uint32_t i = 0; i < FFT_EVENT_COUNT; i++) {
+        fft_event_desc_t desc = fft_event_desc_list[i];
+        if (desc.usable == false) {
+            continue;
+        }
+        fft_event_t event = fft_event_get_event(desc.event_id);
+        FFT_ASSERT(event.valid, "Event %d (%s) is not valid", desc.event_id, desc.name);
     }
 }

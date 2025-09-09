@@ -1554,43 +1554,6 @@ fft_scenario_t fft_scenario_get_scenario(uint32_t);
 
 /*
 ================================================================================
-Events
-================================================================================
-
-Events represent a sequence of instructions that are executed to create dynamic
-behaviors in the game. Each event consists of a series of opcodes, which are
-commands that dictate specific actions or operations to be performed. The
-opcodes can manipulate game elements such as characters, environments, and other
-interactive components.
-
-================================================================================
-*/
-
-enum {
-    FFT_EVENT_SIZE = 8192,
-    FFT_EVENT_COUNT = 491
-};
-
-// Event descriptions are event ids, names and if they are usable. For viewing
-// scenarios, we only use events that have text and code related to them. We
-// index into this list by scenario_t.event_id, but some of these are never
-// indexed by a scenario. They are documented below starting at 0x0190. Seems to
-// be the game over event and events related to random battles.
-//
-// The event_id always matchess the battle.event_id.
-typedef struct {
-    uint16_t event_id;
-    uint16_t scenario_id;
-    bool usable;
-    const char* name;
-} fft_event_desc_t;
-
-extern fft_event_desc_t event_desc_list[];
-
-static_assert(FFT_EVENT_COUNT == FFT_SCENARIO_COUNT, "Event/battle count mismatch");
-
-/*
-================================================================================
 Event Opcodes
 ================================================================================
 
@@ -1851,6 +1814,65 @@ enum {
 size_t fft_text_read(fft_span_t*, char*);
 size_t fft_text_count(const char*);
 size_t fft_text_by_index(const char* string, int index, char* buffer);
+
+/*
+================================================================================
+Events
+================================================================================
+
+Events represent a sequence of instructions that are executed to create dynamic
+behaviors in the game. Each event consists of a series of opcodes, which are
+commands that dictate specific actions or operations to be performed. The
+opcodes can manipulate game elements such as characters, environments, and other
+interactive components.
+
+================================================================================
+*/
+
+enum {
+    FFT_EVENT_SIZE = 8192,
+    FFT_EVENT_COUNT = 491
+};
+
+// An event is a list of text and instructions for a particular scenario.
+//
+// Events are alway 8192 (0x2000) bytes long. There are 3 components.
+// - text_offset: First 4 bytes is a pointer to the to the text_section.
+//   - If the offset is 0xF2F2F2F2, then the event should be skipped.
+//     These are battle setup events and other non map events.
+// - code_section: Bytes 5 to text_offset is the code section.
+// - text_section: Bytes text_offset thru 8192 is the text section.
+typedef struct {
+    char messages[FFT_TEXT_MAX_LEN];
+    size_t messages_len;
+    size_t message_count;
+
+    fft_instruction_t instructions[FFT_INSTRUCTION_MAX];
+    size_t instruction_count;
+
+    uint8_t data[FFT_EVENT_SIZE];
+    bool valid;
+} fft_event_t;
+
+// Event descriptions are event ids, names and if they are usable. For viewing
+// scenarios, we only use events that have text and code related to them. We
+// index into this list by scenario_t.event_id, but some of these are never
+// indexed by a scenario. They are documented below starting at 0x0190. Seems to
+// be the game over event and events related to random battles.
+//
+// The event_id always matchess the battle.event_id.
+typedef struct {
+    uint16_t event_id;
+    uint16_t scenario_id;
+    bool usable;
+    const char* name;
+} fft_event_desc_t;
+
+extern fft_event_desc_t event_desc_list[];
+
+fft_event_t fft_event_get_event(uint32_t);
+
+static_assert(FFT_EVENT_COUNT == FFT_SCENARIO_COUNT, "Event/battle count mismatch");
 
 #ifdef __cplusplus
 }
@@ -3390,7 +3412,7 @@ size_t fft_text_read(fft_span_t* span, char* out_text) {
         case 0xE2: {
             uint8_t delay = fft_span_read_u8(span);
             char buffer[32];
-            size_t len = snprintf(buffer, sizeof(buffer), "{Delay: %d}", (int)delay);
+            size_t len = (size_t)snprintf(buffer, sizeof(buffer), "{Delay: %d}", (uint32_t)delay);
             memcpy(&out_text[length], buffer, len);
             length += len;
             break;
@@ -3398,7 +3420,7 @@ size_t fft_text_read(fft_span_t* span, char* out_text) {
         case 0xE3: {
             uint8_t color = fft_span_read_u8(span);
             char buffer[32];
-            size_t len = snprintf(buffer, sizeof(buffer), "{Color: %d}", (int)color);
+            size_t len = (size_t)snprintf(buffer, sizeof(buffer), "{Color: %d}", (uint32_t)color);
             memcpy(&out_text[length], buffer, len);
             length += len;
             break;
@@ -3453,7 +3475,7 @@ size_t fft_text_read(fft_span_t* span, char* out_text) {
                 } else {
                     /* Unknown character */
                     char buffer[64];
-                    size_t len = snprintf(buffer, sizeof(buffer), "{Unknown: 0x%X & 0x%X}", byte, second_byte);
+                    size_t len = (size_t)snprintf(buffer, sizeof(buffer), "{Unknown: 0x%X & 0x%X}", byte, second_byte);
                     memcpy(&out_text[length], buffer, len);
                     length += len;
                 }
@@ -3529,6 +3551,50 @@ size_t fft_text_count(const char* string) {
     }
 
     return count;
+}
+
+/*
+================================================================================
+Events Implementation
+================================================================================
+*/
+
+static fft_event_t fft_event_read(fft_span_t* span) {
+    fft_event_t event = { .valid = false };
+
+    uint32_t text_offset = fft_span_read_u32(span);
+    if (text_offset == 0xF2F2F2F2) { // Invalid event marker
+        return event;
+    }
+
+    memcpy(event.data, span->data, FFT_EVENT_SIZE);
+
+    size_t text_size = FFT_EVENT_SIZE - text_offset;
+    fft_span_t text_span = { .data = event.data + text_offset, .size = text_size };
+    size_t messages_len = fft_text_read(&text_span, event.messages);
+    size_t msg_count = fft_text_count(event.messages);
+
+    size_t code_size = text_offset - 4;
+    fft_span_t code_span = { .data = event.data + 4, .size = code_size };
+    size_t instruction_count = fft_instructions_read(&code_span, event.instructions);
+
+    event.message_count = msg_count;
+    event.messages_len = messages_len;
+    event.instruction_count = instruction_count;
+    event.valid = true;
+    return event;
+}
+
+fft_event_t fft_event_get_event(uint32_t id) {
+    FFT_ASSERT(id < FFT_EVENT_COUNT, "Event id %d out of bounds", id);
+    fft_span_t file = fft_io_open(F_EVENT__TEST_EVT);
+    fft_span_t span = {
+        .data = file.data + (id * FFT_EVENT_SIZE),
+        .size = FFT_EVENT_SIZE,
+    };
+    fft_event_t event = fft_event_read(&span);
+    fft_io_close(file);
+    return event;
 }
 
 /*
