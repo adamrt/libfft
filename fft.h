@@ -109,9 +109,9 @@ Our data structure splits the values from the first byte into two separate field
 
     ```c
     typedef struct {
-        u8 x;
-        u8 z;
-        u8 elevation;
+        uint8_t x;
+        uint8_t z;
+        uint8_t elevation;
     } fft_tileinfo_t;
     ```
 
@@ -124,9 +124,12 @@ extern "C" {
 #endif
 
 #include <assert.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+static_assert(CHAR_BIT == 8, "requires 8-bit bytes");
 
 /*
 ================================================================================
@@ -1830,6 +1833,25 @@ typedef struct {
 const char* fft_font_get_char(uint16_t id);
 extern const fft_font_char_t fft_font_chars[FFT_FONT_CHAR_COUNT];
 
+/*
+================================================================================
+Event Text
+================================================================================
+
+Text in events is used to display messages to the player. This text can include
+character dialogues, narrative descriptions, and other in-game information.
+
+================================================================================
+*/
+
+enum {
+    FFT_TEXT_MAX_LEN = 16384,
+};
+
+size_t fft_text_read(fft_span_t*, char*);
+size_t fft_text_count(const char*);
+size_t fft_text_by_index(const char* string, int index, char* buffer);
+
 #ifdef __cplusplus
 }
 #endif
@@ -3332,6 +3354,181 @@ const char* fft_font_get_char(uint16_t id) {
         return NULL;
     }
     return result->data;
+}
+
+/*
+================================================================================
+Event Text Implementation
+================================================================================
+*/
+
+enum {
+    FFT_TEXT_DELIM = 0xFE,
+};
+
+size_t fft_text_read(fft_span_t* span, char* out_text) {
+    size_t length = 0;
+
+    while (span->offset < span->size) {
+        uint8_t byte = fft_span_read_u8(span);
+
+        // These are special characters. We need to handle them differently.
+        // https://ffhacktics.com/wiki/Text_Format#Special_Characters
+        switch (byte) {
+        case FFT_TEXT_DELIM:
+            // This is the message delimiter.
+            out_text[length++] = 0xFE;
+            break;
+        case 0xE0: {
+            // Character name stored somewhere else. Hard coding for now.
+            const char* name = "Ramza";
+            size_t len = strlen(name);
+            memcpy(&out_text[length], name, len);
+            length += len;
+            break;
+        }
+        case 0xE2: {
+            uint8_t delay = fft_span_read_u8(span);
+            char buffer[32];
+            size_t len = snprintf(buffer, sizeof(buffer), "{Delay: %d}", (int)delay);
+            memcpy(&out_text[length], buffer, len);
+            length += len;
+            break;
+        }
+        case 0xE3: {
+            uint8_t color = fft_span_read_u8(span);
+            char buffer[32];
+            size_t len = snprintf(buffer, sizeof(buffer), "{Color: %d}", (int)color);
+            memcpy(&out_text[length], buffer, len);
+            length += len;
+            break;
+        }
+        case 0xF0:
+        case 0xF1:
+        case 0xF2:
+        case 0xF3: {
+            // This is a jump to another point in the text section.
+            // The next 2 bytes are the jump location and how many bytes to read.
+            // https://gomtuu.org/fft/trans/compression/
+            uint8_t second_byte = fft_span_read_u8(span);
+            uint8_t third_byte = fft_span_read_u8(span);
+            (void)second_byte; // Unused
+            (void)third_byte;  // Unused
+            const char* text_jump = "{TextJump}";
+            size_t len = strlen(text_jump);
+            memcpy(&out_text[length], text_jump, len);
+            length += len;
+            break;
+        }
+        case 0xF8: {
+            // New line/Line break
+            const char* close_str = "{LB}";
+            size_t len = strlen(close_str);
+            memcpy(&out_text[length], close_str, len);
+            length += len;
+            break;
+        }
+        case 0xFA:
+            // This one is not in the list but it is very common between words.
+            // It works well as a space though.
+            out_text[length++] = ' ';
+            break;
+        case 0xFF: {
+            const char* close_str = "{Close}";
+            size_t len = strlen(close_str);
+            memcpy(&out_text[length], close_str, len);
+            length += len;
+            break;
+        }
+        default: {
+            if (byte > 0xCF) {
+                /* Two-byte character */
+                uint8_t second_byte = fft_span_read_u8(span);
+                uint16_t combined = (uint16_t)(second_byte | ((uint16_t)byte << 8));
+                const char* font_str = fft_font_get_char(combined);
+                if (font_str != NULL) {
+                    size_t len = strlen(font_str);
+                    memcpy(&out_text[length], font_str, len);
+                    length += len;
+                } else {
+                    /* Unknown character */
+                    char buffer[64];
+                    size_t len = snprintf(buffer, sizeof(buffer), "{Unknown: 0x%X & 0x%X}", byte, second_byte);
+                    memcpy(&out_text[length], buffer, len);
+                    length += len;
+                }
+            } else {
+                /* Single-byte character */
+                const char* font_str = fft_font_get_char(byte);
+                if (font_str != NULL) {
+                    size_t len = strlen(font_str);
+                    memcpy(&out_text[length], font_str, len);
+                    length += len;
+                } else {
+                    /* Unknown character */
+                    out_text[length++] = '^';
+                }
+            }
+            break;
+        }
+        }
+    }
+
+    out_text[length] = '\0';
+    return length;
+}
+
+size_t fft_text_by_index(const char* string, int index, char* buffer) {
+    FFT_ASSERT(index > 0, "Index must be greater than 0");
+    FFT_ASSERT(buffer != NULL, "Buffer must not be NULL");
+
+    int current_index = 1; // 1-based indexing
+    const char* start = string;
+    const char* ptr = string;
+
+    while (*ptr != '\0') {
+        if ((unsigned char)*ptr == FFT_TEXT_DELIM) {
+            if (current_index == index) {
+                ptrdiff_t diff = ptr - start;
+                FFT_ASSERT(diff >= 0, "negative length?");
+                size_t length = (size_t)diff;
+                strlcpy(buffer, start, length + 1);
+                return 0;
+            }
+            // Move to the next substring
+            current_index++;
+            start = ptr + 1;
+        }
+        ptr++;
+    }
+
+    // Check if the last substring is the desired one
+    if (current_index == index) {
+        ptrdiff_t diff = ptr - start;
+        FFT_ASSERT(diff >= 0, "negative length?");
+        size_t length = (size_t)diff;
+        strlcpy(buffer, start, length + 1);
+        return 0;
+    }
+
+    FFT_ASSERT(false, "Index out of bounds");
+}
+
+size_t fft_text_count(const char* string) {
+    FFT_ASSERT(string != NULL, "String must not be NULL");
+    if (*string == '\0') {
+        return 0;
+    }
+
+    size_t count = 1;
+    const char* ptr = string;
+    for (; *ptr; ++ptr) {
+        if ((uint8_t)*ptr == FFT_TEXT_DELIM) {
+            count++;
+        }
+    }
+
+    return count;
 }
 
 /*
