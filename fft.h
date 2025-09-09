@@ -128,6 +128,18 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
+/*
+================================================================================
+Entrypoint
+================================================================================
+
+These functions are the main entrypoints for reading any data. Pass in the path
+to your PSX FFT BIN file to fft_init() at your program start and call
+fft_shutdown() at the end of your program to clean up resources.
+
+================================================================================
+*/
+
 void fft_init(const char* filename);
 void fft_shutdown(void);
 
