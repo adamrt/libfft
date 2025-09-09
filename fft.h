@@ -1583,6 +1583,185 @@ extern fft_event_desc_t event_desc_list[];
 
 static_assert(FFT_EVENT_COUNT == FFT_SCENARIO_COUNT, "Event/battle count mismatch");
 
+/*
+================================================================================
+Event Opcodes
+================================================================================
+
+Opcodes are the codes used in event scripts to identify which operation to
+perform. Each opcode has a specific number of parameters, which can be of
+different types (e.g., u8, u16). The parameters are used to provide additional
+information needed to execute the operation.
+
+================================================================================
+*/
+enum {
+    FFT_OPCODE_PARAM_MAX = 14,
+};
+
+#define FFT_PARAMS(...) { __VA_ARGS__ }
+
+#define FFT_OPCODE_LIST                                                                                         \
+    X(FFT_OPCODE_DISPLAYMESSAGE, 0x10, "DisplayMessage", FFT_PARAMS(1, 1, 2, 1, 1, 1, 2, 2, 2, 1), 10)          \
+    X(FFT_OPCODE_UNITANIM, 0x11, "UnitAnim", FFT_PARAMS(1, 1, 1, 1, 1), 5)                                      \
+    X(FFT_OPCODE_UNKNOWN_0x12, 0x12, "Unknown(0x12)", FFT_PARAMS(2), 1)                                         \
+    X(FFT_OPCODE_CHANGEMAPBETA, 0x13, "ChangeMapBeta", FFT_PARAMS(1, 1), 2)                                     \
+    X(FFT_OPCODE_PAUSE, 0x16, "Pause", FFT_PARAMS(0), 0)                                                        \
+    X(FFT_OPCODE_EFFECT, 0x18, "Effect", FFT_PARAMS(2, 1, 1, 1, 1), 5)                                          \
+    X(FFT_OPCODE_CAMERA, 0x19, "Camera", FFT_PARAMS(2, 2, 2, 2, 2, 2, 2, 2), 8)                                 \
+    X(FFT_OPCODE_MAPDARKNESS, 0x1A, "MapDarkness", FFT_PARAMS(1, 1, 1, 1, 1), 5)                                \
+    X(FFT_OPCODE_MAPLIGHT, 0x1B, "MapLight", FFT_PARAMS(2, 2, 2, 2, 2, 2, 2), 7)                                \
+    X(FFT_OPCODE_EVENTSPEED, 0x1C, "EventSpeed", FFT_PARAMS(1), 1)                                              \
+    X(FFT_OPCODE_CAMERAFUSIONSTART, 0x1D, "CameraFusionStart", FFT_PARAMS(0), 0)                                \
+    X(FFT_OPCODE_CAMERAFUSIONEND, 0x1E, "CameraFusionEnd", FFT_PARAMS(0), 0)                                    \
+    X(FFT_OPCODE_FOCUS, 0x1F, "Focus", FFT_PARAMS(1, 1, 1, 1, 1), 5)                                            \
+    X(FFT_OPCODE_SOUNDEFFECT, 0x21, "SoundEffect", FFT_PARAMS(2), 1)                                            \
+    X(FFT_OPCODE_SWITCHTRACK, 0x22, "SwitchTrack", FFT_PARAMS(1, 1, 1), 3)                                      \
+    X(FFT_OPCODE_RELOADMAPSTATE, 0x27, "ReloadMapState", FFT_PARAMS(0), 0)                                      \
+    X(FFT_OPCODE_WALKTO, 0x28, "WalkTo", FFT_PARAMS(1, 1, 1, 1, 1, 1, 1, 1), 8)                                 \
+    X(FFT_OPCODE_WAITWALK, 0x29, "WaitWalk", FFT_PARAMS(1, 1), 2)                                               \
+    X(FFT_OPCODE_BLOCKSTART, 0x2A, "BlockStart", FFT_PARAMS(0), 0)                                              \
+    X(FFT_OPCODE_BLOCKEND, 0x2B, "BlockEnd", FFT_PARAMS(0), 0)                                                  \
+    X(FFT_OPCODE_FACEUNIT2, 0x2C, "FaceUnit2", FFT_PARAMS(1, 1, 1, 1, 1, 1, 1), 7)                              \
+    X(FFT_OPCODE_ROTATEUNIT, 0x2D, "RotateUnit", FFT_PARAMS(1, 1, 1, 1, 1, 1), 6)                               \
+    X(FFT_OPCODE_BACKGROUND, 0x2E, "Background", FFT_PARAMS(1, 1, 1, 1, 1, 1, 1, 1), 8)                         \
+    X(FFT_OPCODE_COLORBGBETA, 0x31, "ColorBGBeta", FFT_PARAMS(1, 1, 1, 1, 1), 5)                                \
+    X(FFT_OPCODE_COLORUNIT, 0x32, "ColorUnit", FFT_PARAMS(1, 1, 1, 1, 1, 1, 1), 7)                              \
+    X(FFT_OPCODE_COLORFIELD, 0x33, "ColorField", FFT_PARAMS(1, 1, 1, 1, 1), 5)                                  \
+    X(FFT_OPCODE_FOCUSSPEED, 0x38, "FocusSpeed", FFT_PARAMS(2), 1)                                              \
+    X(FFT_OPCODE_UNKNOWN_0x39, 0x39, "Unknown(0x39)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_UNKNOWN_0x3A, 0x3A, "Unknown(0x3A)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_SPRITEMOVE, 0x3B, "SpriteMove", FFT_PARAMS(1, 1, 2, 2, 2, 1, 1, 2), 8)                         \
+    X(FFT_OPCODE_WEATHER, 0x3C, "Weather", FFT_PARAMS(1, 1), 2)                                                 \
+    X(FFT_OPCODE_REMOVEUNIT, 0x3D, "RemoveUnit", FFT_PARAMS(1, 1), 2)                                           \
+    X(FFT_OPCODE_COLORSCREEN, 0x3E, "ColorScreen", FFT_PARAMS(1, 1, 1, 1, 1, 1, 1, 2), 8)                       \
+    X(FFT_OPCODE_UNKNOWN_0x40, 0x40, "Unknown(0x40)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_EARTHQUAKESTART, 0x41, "EarthquakeStart", FFT_PARAMS(1, 1, 1, 1), 4)                           \
+    X(FFT_OPCODE_EARTHQUAKEEND, 0x42, "EarthquakeEnd", FFT_PARAMS(0), 0)                                        \
+    X(FFT_OPCODE_CALLFUNCTION, 0x43, "CallFunction", FFT_PARAMS(1), 1)                                          \
+    X(FFT_OPCODE_DRAW, 0x44, "Draw", FFT_PARAMS(1, 1), 2)                                                       \
+    X(FFT_OPCODE_ADDUNIT, 0x45, "AddUnit", FFT_PARAMS(1, 1, 1), 3)                                              \
+    X(FFT_OPCODE_ERASE, 0x46, "Erase", FFT_PARAMS(1, 1), 2)                                                     \
+    X(FFT_OPCODE_ADDGHOSTUNIT, 0x47, "AddGhostUnit", FFT_PARAMS(1, 1, 1, 1, 1, 1, 1, 1), 8)                     \
+    X(FFT_OPCODE_WAITADDUNIT, 0x48, "WaitAddUnit", FFT_PARAMS(0), 0)                                            \
+    X(FFT_OPCODE_ADDUNITSTART, 0x49, "AddUnitStart", FFT_PARAMS(0), 0)                                          \
+    X(FFT_OPCODE_ADDUNITEND, 0x4A, "AddUnitEnd", FFT_PARAMS(0), 0)                                              \
+    X(FFT_OPCODE_WAITADDUNITEND, 0x4B, "WaitAddUnitEnd", FFT_PARAMS(0), 0)                                      \
+    X(FFT_OPCODE_CHANGEMAP, 0x4C, "ChangeMap", FFT_PARAMS(1, 1), 2)                                             \
+    X(FFT_OPCODE_REVEAL, 0x4D, "Reveal", FFT_PARAMS(1), 1)                                                      \
+    X(FFT_OPCODE_UNITSHADOW, 0x4E, "UnitShadow", FFT_PARAMS(1, 1, 1), 3)                                        \
+    X(FFT_OPCODE_PORTRAITCOL, 0x50, "PortraitCol", FFT_PARAMS(1), 1)                                            \
+    X(FFT_OPCODE_CHANGEDIALOG, 0x51, "ChangeDialog", FFT_PARAMS(1, 2, 1, 1), 4)                                 \
+    X(FFT_OPCODE_FACEUNIT, 0x53, "FaceUnit", FFT_PARAMS(1, 1, 1, 1, 1, 1, 1), 7)                                \
+    X(FFT_OPCODE_USE3DOBJECT, 0x54, "Use3DObject", FFT_PARAMS(1, 1), 2)                                         \
+    X(FFT_OPCODE_USEFIELDOBJECT, 0x55, "UseFieldObject", FFT_PARAMS(1, 1), 2)                                   \
+    X(FFT_OPCODE_WAIT3DOBJECT, 0x56, "Wait3DObject", FFT_PARAMS(0), 0)                                          \
+    X(FFT_OPCODE_WAITFIELDOBJECT, 0x57, "WaitFieldObject", FFT_PARAMS(0), 0)                                    \
+    X(FFT_OPCODE_LOADEVTCHR, 0x58, "LoadEVTCHR", FFT_PARAMS(1, 1, 1), 3)                                        \
+    X(FFT_OPCODE_SAVEEVTCHR, 0x59, "SaveEVTCHR", FFT_PARAMS(1), 1)                                              \
+    X(FFT_OPCODE_SAVEEVTCHRCLEAR, 0x5A, "SaveEVTCHRClear", FFT_PARAMS(1), 1)                                    \
+    X(FFT_OPCODE_LOADEVTCHRCLEAR, 0x5B, "LoadEVTCHRClear", FFT_PARAMS(1), 1)                                    \
+    X(FFT_OPCODE_WARPUNIT, 0x5F, "WarpUnit", FFT_PARAMS(1, 1, 1, 1, 1, 1), 6)                                   \
+    X(FFT_OPCODE_FADESOUND, 0x60, "FadeSound", FFT_PARAMS(1, 1), 2)                                             \
+    X(FFT_OPCODE_CAMERASPEEDCURVE, 0x63, "CameraSpeedCurve", FFT_PARAMS(1), 1)                                  \
+    X(FFT_OPCODE_WAITROTATEUNIT, 0x64, "WaitRotateUnit", FFT_PARAMS(1, 1), 2)                                   \
+    X(FFT_OPCODE_WAITROTATEALL, 0x65, "WaitRotateAll", FFT_PARAMS(0), 0)                                        \
+    X(FFT_OPCODE_UNKNOWN_0x66, 0x66, "Unknown(0x66)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_MIRRORSPRITE, 0x68, "MirrorSprite", FFT_PARAMS(1, 1, 1), 3)                                    \
+    X(FFT_OPCODE_FACETILE, 0x69, "FaceTile", FFT_PARAMS(1, 1, 1, 1, 1, 1, 1, 1), 8)                             \
+    X(FFT_OPCODE_EDITBGSOUND, 0x6A, "EditBGSound", FFT_PARAMS(1, 1, 1, 1, 1), 5)                                \
+    X(FFT_OPCODE_BGSOUND, 0x6B, "BGSound", FFT_PARAMS(1, 1, 1, 1, 1), 5)                                        \
+    X(FFT_OPCODE_UNKNOWN_0x6D, 0x6D, "Unknown(0x6D)", FFT_PARAMS(1, 1), 2)                                      \
+    X(FFT_OPCODE_SPRITEMOVEBETA, 0x6E, "SpriteMoveBeta", FFT_PARAMS(1, 1, 2, 2, 2, 1, 1, 2), 8)                 \
+    X(FFT_OPCODE_WAITSPRITEMOVE, 0x6F, "WaitSpriteMove", FFT_PARAMS(1, 1), 2)                                   \
+    X(FFT_OPCODE_JUMP, 0x70, "Jump", FFT_PARAMS(1, 1, 1, 1), 4)                                                 \
+    X(FFT_OPCODE_UNKNOWN_0x71, 0x71, "Unknown(0x71)", FFT_PARAMS(1, 1), 2)                                      \
+    X(FFT_OPCODE_UNKNOWN_0x73, 0x73, "Unknown(0x73)", FFT_PARAMS(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1), 14) \
+    X(FFT_OPCODE_UNKNOWN_0x75, 0x75, "Unknown(0x75)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_DARKSCREEN, 0x76, "DarkScreen", FFT_PARAMS(1, 1, 1, 1, 1, 1), 6)                               \
+    X(FFT_OPCODE_REMOVEDARKSCREEN, 0x77, "RemoveDarkScreen", FFT_PARAMS(0), 0)                                  \
+    X(FFT_OPCODE_DISPLAYCONDITIONS, 0x78, "DisplayConditions", FFT_PARAMS(1, 1), 2)                             \
+    X(FFT_OPCODE_WALKTOANIM, 0x79, "WalkToAnim", FFT_PARAMS(1, 1, 2), 3)                                        \
+    X(FFT_OPCODE_DISMISSUNIT, 0x7A, "DismissUnit", FFT_PARAMS(1, 1), 2)                                         \
+    X(FFT_OPCODE_UNKNOWN_0x7B, 0x7B, "Unknown(0x7B)", FFT_PARAMS(1, 1), 2)                                      \
+    X(FFT_OPCODE_UNKNOWN_0x7C, 0x7C, "Unknown(0x7C)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_SHOWGRAPHIC, 0x7D, "ShowGraphic", FFT_PARAMS(1), 1)                                            \
+    X(FFT_OPCODE_WAITVALUE, 0x7E, "WaitValue", FFT_PARAMS(2, 2), 2)                                             \
+    X(FFT_OPCODE_EVTCHRPALETTE, 0x7F, "EVTCHRPalette", FFT_PARAMS(1, 1, 1, 1), 4)                               \
+    X(FFT_OPCODE_MARCH, 0x80, "March", FFT_PARAMS(1, 1, 1), 3)                                                  \
+    X(FFT_OPCODE_UNKNOWN_0x82, 0x82, "Unknown(0x82)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_CHANGESTATS, 0x83, "ChangeStats", FFT_PARAMS(1, 1, 1, 2), 4)                                   \
+    X(FFT_OPCODE_PLAYTUNE, 0x84, "PlayTune", FFT_PARAMS(1), 1)                                                  \
+    X(FFT_OPCODE_UNLOCKDATE, 0x85, "UnlockDate", FFT_PARAMS(1), 1)                                              \
+    X(FFT_OPCODE_TEMPWEAPON, 0x86, "TempWeapon", FFT_PARAMS(1, 1, 1), 3)                                        \
+    X(FFT_OPCODE_ARROW, 0x87, "Arrow", FFT_PARAMS(1, 1, 1, 1), 4)                                               \
+    X(FFT_OPCODE_MAPUNFREEZE, 0x88, "MapUnfreeze", FFT_PARAMS(0), 0)                                            \
+    X(FFT_OPCODE_MAPFREEZE, 0x89, "MapFreeze", FFT_PARAMS(0), 0)                                                \
+    X(FFT_OPCODE_EFFECTSTART, 0x8A, "EffectStart", FFT_PARAMS(0), 0)                                            \
+    X(FFT_OPCODE_EFFECTEND, 0x8B, "EffectEnd", FFT_PARAMS(0), 0)                                                \
+    X(FFT_OPCODE_UNITANIMROTATE, 0x8C, "UnitAnimRotate", FFT_PARAMS(1, 1, 1, 1, 1, 1), 6)                       \
+    X(FFT_OPCODE_WAITGRAPHICPRINT, 0x8E, "WaitGraphicPrint", FFT_PARAMS(0), 0)                                  \
+    X(FFT_OPCODE_UNKNOWN_0x8F, 0x8F, "Unknown(0x8F)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_UNKNOWN_0x90, 0x90, "Unknown(0x90)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_SHOWMAPTITLE, 0x91, "ShowMapTitle", FFT_PARAMS(1, 1, 1), 3)                                    \
+    X(FFT_OPCODE_INFLICTSTATUS, 0x92, "InflictStatus", FFT_PARAMS(1, 1, 1, 1, 1), 5)                            \
+    X(FFT_OPCODE_UNKNOWN_0x93, 0x93, "Unknown(0x93)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_TELEPORTOUT, 0x94, "TeleportOut", FFT_PARAMS(1, 1), 2)                                         \
+    X(FFT_OPCODE_APPENDMAPSTATE, 0x96, "AppendMapState", FFT_PARAMS(0), 0)                                      \
+    X(FFT_OPCODE_RESETPALETTE, 0x97, "ResetPalette", FFT_PARAMS(1, 1), 2)                                       \
+    X(FFT_OPCODE_TELEPORTIN, 0x98, "TeleportIn", FFT_PARAMS(1, 1), 2)                                           \
+    X(FFT_OPCODE_BLUEREMOVEUNIT, 0x99, "BlueRemoveUnit", FFT_PARAMS(1, 1), 2)                                   \
+    X(FFT_OPCODE_LTE, 0xA0, "LTE", FFT_PARAMS(0), 0)                                                            \
+    X(FFT_OPCODE_GTE, 0xA1, "GTE", FFT_PARAMS(0), 0)                                                            \
+    X(FFT_OPCODE_EQ, 0xA2, "EQ", FFT_PARAMS(0), 0)                                                              \
+    X(FFT_OPCODE_NEQ, 0xA3, "NEQ", FFT_PARAMS(0), 0)                                                            \
+    X(FFT_OPCODE_LT, 0xA4, "LT", FFT_PARAMS(0), 0)                                                              \
+    X(FFT_OPCODE_GT, 0xA5, "GT", FFT_PARAMS(0), 0)                                                              \
+    X(FFT_OPCODE_ADD, 0xB0, "ADD", FFT_PARAMS(2, 2), 2)                                                         \
+    X(FFT_OPCODE_ADDVAR, 0xB1, "ADDVar", FFT_PARAMS(2, 2), 2)                                                   \
+    X(FFT_OPCODE_SUB, 0xB2, "SUB", FFT_PARAMS(2, 2), 2)                                                         \
+    X(FFT_OPCODE_SUBVAR, 0xB3, "SUBVar", FFT_PARAMS(2, 2), 2)                                                   \
+    X(FFT_OPCODE_MULT, 0xB4, "MULT", FFT_PARAMS(2, 2), 2)                                                       \
+    X(FFT_OPCODE_MULTVAR, 0xB5, "MULTVar", FFT_PARAMS(2, 2), 2)                                                 \
+    X(FFT_OPCODE_DIV, 0xB6, "DIV", FFT_PARAMS(2, 2), 2)                                                         \
+    X(FFT_OPCODE_DIVVAR, 0xB7, "DIVVar", FFT_PARAMS(2, 2), 2)                                                   \
+    X(FFT_OPCODE_MOD, 0xB8, "MOD", FFT_PARAMS(2, 2), 2)                                                         \
+    X(FFT_OPCODE_MODVAR, 0xB9, "MODVar", FFT_PARAMS(2, 2), 2)                                                   \
+    X(FFT_OPCODE_AND, 0xBA, "AND", FFT_PARAMS(2, 2), 2)                                                         \
+    X(FFT_OPCODE_ANDVAR, 0xBB, "ANDVar", FFT_PARAMS(2, 2), 2)                                                   \
+    X(FFT_OPCODE_OR, 0xBC, "OR", FFT_PARAMS(2, 2), 2)                                                           \
+    X(FFT_OPCODE_ORVAR, 0xBD, "ORVar", FFT_PARAMS(2, 2), 2)                                                     \
+    X(FFT_OPCODE_ZERO, 0xBE, "ZERO", FFT_PARAMS(2), 1)                                                          \
+    X(FFT_OPCODE_JUMPFORWARDIFZERO, 0xD0, "JumpForwardIfZero", FFT_PARAMS(1), 1)                                \
+    X(FFT_OPCODE_JUMPFORWARD, 0xD1, "JumpForward", FFT_PARAMS(1), 1)                                            \
+    X(FFT_OPCODE_FORWARDTARGET, 0xD2, "ForwardTarget", FFT_PARAMS(1), 1)                                        \
+    X(FFT_OPCODE_JUMPBACK, 0xD3, "JumpBack", FFT_PARAMS(1), 1)                                                  \
+    X(FFT_OPCODE_UNKNOWN_0xD4, 0xD4, "Unknown(0xD4)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_BACKTARGET, 0xD5, "BackTarget", FFT_PARAMS(1), 1)                                              \
+    X(FFT_OPCODE_EVENTEND, 0xDB, "EventEnd", FFT_PARAMS(0), 0)                                                  \
+    X(FFT_OPCODE_EVENTEND2, 0xE3, "EventEnd2", FFT_PARAMS(0), 0)                                                \
+    X(FFT_OPCODE_WAITFORINSTRUCTION, 0xE5, "WaitForInstruction", FFT_PARAMS(1, 1), 2)                           \
+    X(FFT_OPCODE_UNKNOWN_0xF0, 0xF0, "Unknown(0xF0)", FFT_PARAMS(0), 0)                                         \
+    X(FFT_OPCODE_WAIT, 0xF1, "Wait", FFT_PARAMS(2), 1)                                                          \
+    X(FFT_OPCODE_PAD, 0xF2, "Pad", FFT_PARAMS(0), 0)
+
+typedef enum {
+#define X(code, value, name, params, param_count) code = value,
+    FFT_OPCODE_LIST
+#undef X
+        FFT_OPCODE_COUNT
+} fft_opcode_e;
+
+// opcode_desc_t is a struct that describes an opcode and its parameters.
+typedef struct {
+    fft_opcode_e opcode;
+    const char* name;
+    uint8_t param_sizes[FFT_OPCODE_PARAM_MAX];
+    uint8_t param_count;
+} fft_opcode_desc_t;
+
+extern const fft_opcode_desc_t fft_opcode_desc_list[];
+
 #ifdef __cplusplus
 }
 #endif
@@ -3670,6 +3849,12 @@ fft_event_desc_t fft_event_desc_list[FFT_EVENT_COUNT] = {
     { 0x01E8, 0x01DD, false, "Reis Curse (Setup)" },
     { 0x01E9, 0x01DE, true, "Reis Curse" },
     { 0x01EA, 0x01DF, true, "Bethla Sluice (Late add-in Ramza hint)" },
+};
+
+const fft_opcode_desc_t opcode_desc_list[] = {
+#define X(code, value, name, params, param_count) [code] = { value, name, params, param_count },
+    FFT_OPCODE_LIST
+#undef X
 };
 
 #endif // FFT_IMPLEMENTATION
