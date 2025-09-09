@@ -837,8 +837,6 @@ uint8_t fft_color_5551_g8(fft_color_5551_t c);
 uint8_t fft_color_5551_b8(fft_color_5551_t c);
 uint8_t fft_color_5551_a8(fft_color_5551_t c);
 
-bool fft_color_5551_is_transparent(fft_color_5551_t color);
-
 // === fft_color_rgbfx16_t
 //
 // This is a 48-bit RGB fixed-point format. This color is used for
@@ -850,9 +848,6 @@ typedef struct {
 } fft_color_rgbfx16_t;
 
 fft_color_rgbfx16_t fft_color_rgbfx16_read(fft_span_t* span);
-float fft_color_rgbfx16_r8(fft_color_rgbfx16_t c);
-float fft_color_rgbfx16_g8(fft_color_rgbfx16_t c);
-float fft_color_rgbfx16_b8(fft_color_rgbfx16_t c);
 
 // === fft_color_rgb8_t
 //
@@ -2175,14 +2170,6 @@ fft_color_rgb8_t fft_color_rgb8_read(fft_span_t* span) {
     color.g = fft_span_read_u8(span); // 8 bits for green
     color.b = fft_span_read_u8(span); // 8 bits for blue
     return color;
-}
-
-bool fft_color_5551_is_transparent(fft_color_5551_t color) {
-    uint8_t r = fft_color_5551_r8(color);
-    uint8_t g = fft_color_5551_g8(color);
-    uint8_t b = fft_color_5551_b8(color);
-    uint8_t a = fft_color_5551_a8(color);
-    return (r + g + b + a) == 0;
 }
 
 fft_color_t fft_color_from_5551(fft_color_5551_t c) {
